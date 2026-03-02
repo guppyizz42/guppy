@@ -2,98 +2,138 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Guppy | Anonymous</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Guppy | Global Chat</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        :root { --accent: #8e44ad; --bg: #0f0f13; --panel: rgba(255, 255, 255, 0.05); }
+        /* The Soft Beige Color Palette */
+        :root { 
+            --blue: #007AFF; 
+            --bg-outer: #F4F1EA; /* Eye-friendly soft beige */
+            --bg-inner: #FFFFFF;
+            --red: #FF3B30; 
+            --green: #34C759; 
+            --gray: #8E8E93;
+        }
+        
         body { 
-            background: var(--bg); 
-            color: #e0e0e0; 
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif; 
+            background: var(--bg-outer); 
             margin: 0; 
-            height: 100vh; 
             display: flex; 
             justify-content: center; 
             align-items: center; 
-            overflow: hidden;
-            font-family: 'Courier New', Courier, monospace;
-            background: radial-gradient(circle at top right, #1a1a2e, #0f0f13);
+            height: 100dvh; /* 100dvh stops mobile browsers from hiding the text box */
         }
         
         #app { 
-            width: 90%; max-width: 1000px; height: 85vh; 
-            background: var(--panel); 
-            backdrop-filter: blur(15px);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 2px;
-            display: flex; flex-direction: column;
-            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+            width: 900px; 
+            height: 650px; 
+            background: var(--bg-inner); 
+            border-radius: 20px; 
+            box-shadow: 0 15px 35px rgba(0,0,0,0.05); 
+            display: flex; 
+            overflow: hidden; 
         }
 
-        .header { padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; }
-        .online-dot { height: 8px; width: 8px; background: #00ff88; border-radius: 50%; display: inline-block; margin-right: 5px; }
+        /* 📱 STRICT MOBILE FIXES */
+        @media (max-width: 800px) { 
+            #app { 
+                width: 100%; 
+                height: 100dvh; 
+                border-radius: 0; 
+                flex-direction: column; 
+            } 
+            .sidebar { 
+                width: 100% !important; 
+                border-right: none !important; 
+                border-bottom: 1px solid #EEE; 
+                padding: 15px !important; 
+                flex-direction: row !important; 
+                flex-wrap: wrap; 
+                justify-content: space-between;
+                gap: 10px;
+            }
+            .sidebar > div { width: 100%; }
+            #start-controls { display: flex; gap: 10px; margin-top: 10px; }
+            #start-controls button { margin-bottom: 0 !important; flex: 1; }
+            #action-controls { display: flex; flex-direction: row !important; gap: 10px; }
+            #action-controls button { flex: 1; }
+            .chat-main { height: 0; } /* Forces the chat window to scroll properly on mobile */
+        }
 
-        .main-layout { display: flex; flex: 1; overflow: hidden; }
+        .sidebar { width: 260px; border-right: 1px solid #EEE; padding: 25px; display: flex; flex-direction: column; box-sizing: border-box; background: #FAFAFA; }
+        .tag-input { padding: 12px; border-radius: 12px; border: 1px solid #DDD; outline: none; margin-bottom: 15px; width: 100%; box-sizing: border-box; font-size: 14px; }
         
-        .sidebar { width: 250px; padding: 20px; border-right: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 20px; }
-        .chat-area { flex: 1; display: flex; flex-direction: column; position: relative; }
-
-        #messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
-        .msg { max-width: 80%; padding: 10px 15px; font-size: 14px; line-height: 1.6; }
-        .me { border-left: 2px solid var(--accent); align-self: flex-end; color: #fff; }
-        .stranger { border-left: 2px solid #555; align-self: flex-start; }
-
-        .input-box { padding: 20px; display: flex; gap: 10px; background: rgba(0,0,0,0.2); }
-        textarea { 
-            flex: 1; background: transparent; border: none; border-bottom: 1px solid #333; 
-            color: #fff; outline: none; padding: 10px; resize: none; font-family: inherit;
-        }
-
-        .btn { 
-            background: transparent; border: 1px solid #444; color: #aaa; 
-            padding: 10px 20px; cursor: pointer; text-transform: uppercase; letter-spacing: 2px; font-size: 10px;
-        }
-        .btn:hover { border-color: var(--accent); color: #fff; }
-        .btn-active { border-color: var(--accent); color: #fff; box-shadow: 0 0 10px rgba(142, 68, 173, 0.3); }
-
+        .chat-main { flex: 1; display: flex; flex-direction: column; position: relative; }
+        .header { padding: 15px 25px; border-bottom: 1px solid #EEE; display: flex; justify-content: space-between; align-items: center; background: var(--bg-inner); }
+        
+        .btn { padding: 12px 18px; border-radius: 12px; border: none; cursor: pointer; font-weight: bold; font-size: 14px; transition: opacity 0.2s; }
+        .btn:hover { opacity: 0.8; }
+        .btn-blue { background: var(--blue); color: white; }
+        .btn-green { background: var(--green); color: white; }
+        .btn-red { background: var(--red); color: white; }
+        .btn-gray { background: var(--gray); color: white; }
+        
+        #messages { flex: 1; padding: 25px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; background: var(--bg-outer); }
+        .msg { padding: 12px 18px; border-radius: 20px; max-width: 75%; font-size: 15px; line-height: 1.4; word-wrap: break-word; white-space: pre-wrap; }
+        .me { background: var(--blue); color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
+        .stranger { background: var(--bg-inner); align-self: flex-start; border-bottom-left-radius: 4px; border: 1px solid #DDD; }
+        .system { align-self: center; background: transparent; color: var(--gray); font-size: 13px; padding: 5px 10px; font-weight: bold; }
+        
+        .input-area { padding: 15px; border-top: 1px solid #EEE; display: flex; flex-direction: column; background: var(--bg-inner); }
+        .input-row { display: flex; gap: 10px; }
+        textarea { flex: 1; padding: 15px; border-radius: 20px; border: 1px solid #DDD; outline: none; font-size: 15px; resize: none; height: 20px; font-family: inherit; }
+        
+        #typing-indicator { font-size: 13px; color: var(--gray); height: 18px; margin-left: 15px; margin-bottom: 5px; font-style: italic; }
         .hidden-honeypot { position: absolute; left: -9999px; }
-        #voice-modal { 
-            display: none; position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
-            background: #111; border: 1px solid var(--accent); padding: 15px; z-index: 100;
-        }
+        
+        #voice-modal { display: none; position: absolute; top: 60px; left: 50%; transform: translateX(-50%); background: #2C2C2E; color: white; padding: 15px 25px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); z-index: 10; gap: 15px; align-items: center; }
     </style>
 </head>
 <body>
 
 <div id="app">
-    <div class="header">
-        <div>GUPPY_INTERNAL // <span id="chat-status">IDLE</span></div>
-        <div><span class="online-dot"></span><span id="online-count">0</span> ENGINES_ACTIVE</div>
-    </div>
-
-    <div class="main-layout">
-        <div class="sidebar">
-            <input type="text" id="interest-tags" class="btn" style="text-align: left; width: 100%; border: none; border-bottom: 1px solid #333;" placeholder="SET_INTERESTS_TAGS">
-            <input type="text" id="phone_number" class="hidden-honeypot">
-            
-            <button class="btn" id="start-btn" onclick="startChat('text')">INITIALIZE_TEXT</button>
-            <button class="btn" id="voice-start-btn" onclick="startChat('voice')">INITIALIZE_VOICE</button>
-            
-            <button class="btn btn-active" id="skip-btn" style="display:none;" onclick="skipChat()">SKIP_SIGNAL [ESC]</button>
-            <button class="btn" id="report-btn" style="display:none; color: var(--red);" onclick="reportStranger()">TERMINATE_NODE</button>
-            <button class="btn" id="voice-req-btn" style="display:none;" onclick="requestVoice()">UPGRADE_TO_AUDIO</button>
+    <div class="sidebar">
+        <div>
+            <h2 style="margin-top: 0; color: #333;">🐟 Guppy</h2>
+            <p style="color: var(--gray); font-size: 14px;">Online: <span id="online-count" style="font-weight: bold; color: var(--green);">0</span></p>
+        </div>
+        
+        <div id="start-controls">
+            <input type="text" class="tag-input" id="interest-tags" placeholder="Tags: coding, movies, etc...">
+            <input type="text" id="phone_number" class="hidden-honeypot" tabindex="-1" autocomplete="off">
+            <button class="btn btn-blue" style="width: 100%; margin-bottom: 12px;" onclick="startChat('text')">💬 Text Chat</button>
+            <button class="btn btn-green" style="width: 100%;" onclick="startChat('voice')">🎙️ Voice Chat</button>
         </div>
 
-        <div class="chat-area">
-            <div id="voice-modal">
-                INCOMING_AUDIO_REQUEST // <button class="btn" onclick="acceptVoice()">ACCEPT</button>
-            </div>
-            <div id="messages"></div>
-            <div id="typing-indicator" style="padding: 0 20px; font-size: 9px; color: #555;"></div>
-            <div class="input-box">
-                <textarea id="chat-input" placeholder="WAITING_FOR_INPUT..." disabled oninput="handleTyping()" onkeydown="handleEnter(event)"></textarea>
-                <button class="btn" onclick="send()">SEND</button>
+        <div id="action-controls" style="margin-top: auto; display: flex; flex-direction: column; gap: 12px;">
+            <button class="btn btn-red" id="skip-btn" style="display: none;" onclick="skipChat()">⏭️ Skip (Esc)</button>
+            <button class="btn btn-gray" id="report-btn" style="display: none;" onclick="reportStranger()">⚠️ Report Spam</button>
+        </div>
+    </div>
+    
+    <div class="chat-main">
+        <div class="header">
+            <strong id="chat-title" style="color: #333;">Not Connected</strong>
+            <button class="btn btn-green" id="voice-btn" style="display: none; padding: 8px 15px; font-size: 13px;" onclick="requestVoice()">📞 Request Voice</button>
+        </div>
+        
+        <div id="voice-modal">
+            <span>Stranger wants to voice chat!</span>
+            <button class="btn btn-green" onclick="acceptVoice()">Accept</button>
+        </div>
+
+        <div id="messages">
+            <div style="text-align: center; color: #CCC; margin-top: 40%; font-weight: bold;">Select a mode on the left to begin.</div>
+        </div>
+        
+        <div class="input-area">
+            <div id="typing-indicator"></div>
+            <div class="input-row">
+                <textarea id="chat-input" placeholder="Type a message..." maxlength="500" disabled oninput="handleTyping()" onkeydown="handleEnter(event)"></textarea>
+                <button class="btn btn-blue" onclick="send()">Send</button>
             </div>
         </div>
     </div>
@@ -107,7 +147,7 @@
 
     function getSafeUUID() {
         let uuid = localStorage.getItem('guppy_uuid');
-        if (!uuid) { uuid = 'node-' + Date.now().toString(36) + Math.random().toString(36).substring(2); localStorage.setItem('guppy_uuid', uuid); }
+        if (!uuid) { uuid = 'user-' + Date.now().toString(36) + Math.random().toString(36).substring(2); localStorage.setItem('guppy_uuid', uuid); }
         return uuid;
     }
     
@@ -118,39 +158,40 @@
         if (isChatting) return;
         currentMode = mode;
         document.getElementById('messages').innerHTML = ''; 
-        document.getElementById('chat-status').innerText = "SEARCHING...";
+        document.getElementById('chat-title').innerText = "Searching...";
         document.getElementById('skip-btn').style.display = 'block';
+        document.getElementById('start-controls').style.display = 'none';
         socket.emit('find-match', { mode, tags: document.getElementById('interest-tags').value, honeypot: document.getElementById('phone_number').value });
     }
 
     socket.on('match-found', (data) => {
         isChatting = true;
-        document.getElementById('chat-status').innerText = "CONNECTED";
+        document.getElementById('chat-title').innerText = "Stranger connected";
         document.getElementById('chat-input').disabled = false;
         document.getElementById('chat-input').focus();
         document.getElementById('report-btn').style.display = 'block';
-        if (data.mode === 'text') document.getElementById('voice-req-btn').style.display = 'block'; 
-        else if (data.mode === 'voice') initVoice();
+        if (data.mode === 'text') document.getElementById('voice-btn').style.display = 'block'; 
+        else if (data.mode === 'voice') { initVoice(); addSystemMsg("Microphone active.", "system"); }
     });
 
     function send() {
         const input = document.getElementById('chat-input');
         const val = input.value.trim();
-        if (val) { socket.emit('send-msg', val); addMsg(val, 'me'); input.value = ''; socket.emit('stop-typing'); }
+        if (val) { socket.emit('send-msg', val); addMsg(val, 'me'); input.value = ''; socket.emit('stop-typing'); clearTimeout(typingTimer); }
     }
 
     function handleEnter(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }
     function handleTyping() { socket.emit('typing'); clearTimeout(typingTimer); typingTimer = setTimeout(() => socket.emit('stop-typing'), 2000); }
 
     socket.on('receive-msg', msg => { addMsg(msg, 'stranger'); document.getElementById('typing-indicator').innerText = ''; });
-    socket.on('stranger-typing', () => document.getElementById('typing-indicator').innerText = 'STRANGER_IS_TRANSMITTING...');
+    socket.on('stranger-typing', () => document.getElementById('typing-indicator').innerText = 'Stranger is typing...');
     socket.on('stranger-stopped-typing', () => document.getElementById('typing-indicator').innerText = '');
-    socket.on('system-msg', msg => addMsg(`[SYSTEM]: ${msg}`, 'system'));
+    socket.on('system-msg', msg => addSystemMsg(msg, 'system')); 
 
-    function requestVoice() { socket.emit('request-voice'); document.getElementById('voice-req-btn').style.display = 'none'; }
-    socket.on('voice-requested', () => document.getElementById('voice-modal').style.display = 'block');
+    function requestVoice() { if(inVoiceCall) return; socket.emit('request-voice'); addSystemMsg("Voice request sent..."); document.getElementById('voice-btn').style.display = 'none'; }
+    socket.on('voice-requested', () => document.getElementById('voice-modal').style.display = 'flex');
     function acceptVoice() { document.getElementById('voice-modal').style.display = 'none'; socket.emit('accept-voice'); initVoice(); }
-    socket.on('voice-accepted', () => { inVoiceCall = true; initVoice(); });
+    socket.on('voice-accepted', () => { addSystemMsg("Voice chat connected! 🎤"); inVoiceCall = true; document.getElementById('voice-btn').style.display = 'none'; initVoice(); });
 
     function initVoice() {
         peer = new Peer({ config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] }});
@@ -170,29 +211,34 @@
         });
     });
 
-    socket.on('stranger-left', () => { addMsg("[STRANGER_SIGNAL_LOST]", 'system'); resetUI(); });
+    socket.on('stranger-left', () => { addSystemMsg("Stranger disconnected."); resetUI(); });
     function skipChat() { socket.emit('leave-chat'); resetUI(); startChat(currentMode); }
     function reportStranger() { socket.emit('report-user'); skipChat(); }
 
     function resetUI() {
-        isChatting = false;
+        isChatting = false; inVoiceCall = false;
         document.getElementById('chat-input').disabled = true;
-        document.getElementById('chat-status').innerText = "IDLE";
-        document.getElementById('voice-req-btn').style.display = 'none';
+        document.getElementById('chat-title').innerText = "Not Connected";
+        document.getElementById('voice-btn').style.display = 'none';
         document.getElementById('report-btn').style.display = 'none';
         document.getElementById('voice-modal').style.display = 'none';
+        document.getElementById('typing-indicator').innerText = '';
         if(peer) peer.destroy();
     }
 
-    window.addEventListener('keydown', (e) => { if (e.key === "Escape") isChatting ? skipChat() : startChat('text'); });
+    window.addEventListener('keydown', (e) => {
+        if (e.key === "Escape") { isChatting ? skipChat() : (document.getElementById('start-controls').style.display !== 'none' && startChat('text')); }
+    });
 
     function addMsg(text, type) {
         const div = document.createElement('div');
-        div.className = `msg ${type}`;
-        div.innerText = text;
-        const msgs = document.getElementById('messages');
-        msgs.appendChild(div);
-        msgs.scrollTop = msgs.scrollHeight;
+        div.className = `msg ${type}`; div.innerText = text; 
+        const msgs = document.getElementById('messages'); msgs.appendChild(div); msgs.scrollTop = msgs.scrollHeight; 
+    }
+    function addSystemMsg(text, type = 'system') {
+        const div = document.createElement('div');
+        div.className = type === 'system' ? 'system' : 'msg system'; div.innerText = text;
+        const msgs = document.getElementById('messages'); msgs.appendChild(div); msgs.scrollTop = msgs.scrollHeight;
     }
 </script>
 </body>
