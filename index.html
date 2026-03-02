@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guppy | Anonymous</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        :root { --accent: #8e44ad; --bg: #0f0f13; --panel: rgba(255, 255, 255, 0.05); }
+        body { 
+            background: var(--bg); 
+            color: #e0e0e0; 
+            margin: 0; 
+            height: 100vh; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            overflow: hidden;
+            font-family: 'Courier New', Courier, monospace;
+            background: radial-gradient(circle at top right, #1a1a2e, #0f0f13);
+        }
+        
+        #app { 
+            width: 90%; max-width: 1000px; height: 85vh; 
+            background: var(--panel); 
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 2px;
+            display: flex; flex-direction: column;
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+        }
+
+        .header { padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; }
+        .online-dot { height: 8px; width: 8px; background: #00ff88; border-radius: 50%; display: inline-block; margin-right: 5px; }
+
+        .main-layout { display: flex; flex: 1; overflow: hidden; }
+        
+        .sidebar { width: 250px; padding: 20px; border-right: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 20px; }
+        .chat-area { flex: 1; display: flex; flex-direction: column; position: relative; }
+
+        #messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
+        .msg { max-width: 80%; padding: 10px 15px; font-size: 14px; line-height: 1.6; }
+        .me { border-left: 2px solid var(--accent); align-self: flex-end; color: #fff; }
+        .stranger { border-left: 2px solid #555; align-self: flex-start; }
+
+        .input-box { padding: 20px; display: flex; gap: 10px; background: rgba(0,0,0,0.2); }
+        textarea { 
+            flex: 1; background: transparent; border: none; border-bottom: 1px solid #333; 
+            color: #fff; outline: none; padding: 10px; resize: none; font-family: inherit;
+        }
+
+        .btn { 
+            background: transparent; border: 1px solid #444; color: #aaa; 
+            padding: 10px 20px; cursor: pointer; text-transform: uppercase; letter-spacing: 2px; font-size: 10px;
+        }
+        .btn:hover { border-color: var(--accent); color: #fff; }
+        .btn-active { border-color: var(--accent); color: #fff; box-shadow: 0 0 10px rgba(142, 68, 173, 0.3); }
+
+        .hidden-honeypot { position: absolute; left: -9999px; }
+        #voice-modal { 
+            display: none; position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: #111; border: 1px solid var(--accent); padding: 15px; z-index: 100;
+        }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div class="header">
+        <div>GUPPY_INTERNAL // <span id="chat-status">IDLE</span></div>
+        <div><span class="online-dot"></span><span id="online-count">0</span> ENGINES_ACTIVE</div>
+    </div>
+
+    <div class="main-layout">
+        <div class="sidebar">
+            <input type="text" id="interest-tags" class="btn" style="text-align: left; width: 100%; border: none; border-bottom: 1px solid #333;" placeholder="SET_INTERESTS_TAGS">
+            <input type="text" id="phone_number" class="hidden-honeypot">
+            
+            <button class="btn" id="start-btn" onclick="startChat('text')">INITIALIZE_TEXT</button>
+            <button class="btn" id="voice-start-btn" onclick="startChat('voice')">INITIALIZE_VOICE</button>
+            
+            <button class="btn btn-active" id="skip-btn" style="display:none;" onclick="skipChat()">SKIP_SIGNAL [ESC]</button>
+            <button class="btn" id="report-btn" style="display:none; color: var(--red);" onclick="reportStranger()">TERMINATE_NODE</button>
+            <button class="btn" id="voice-req-btn" style="display:none;" onclick="requestVoice()">UPGRADE_TO_AUDIO</button>
+        </div>
+
+        <div class="chat-area">
+            <div id="voice-modal">
+                INCOMING_AUDIO_REQUEST // <button class="btn" onclick="acceptVoice()">ACCEPT</button>
+            </div>
+            <div id="messages"></div>
+            <div id="typing-indicator" style="padding: 0 20px; font-size: 9px; color: #555;"></div>
+            <div class="input-box">
+                <textarea id="chat-input" placeholder="WAITING_FOR_INPUT..." disabled oninput="handleTyping()" onkeydown="handleEnter(event)"></textarea>
+                <button class="btn" onclick="send()">SEND</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<audio id="remote-audio" autoplay></audio>
+
+<script>
+    const socket = io();
+    let currentMode = 'text', isChatting = false, peer, typingTimer, inVoiceCall = false;
+
+    function getSafeUUID() {
+        let uuid = localStorage.getItem('guppy_uuid');
+        if (!uuid) { uuid = 'node-' + Date.now().toString(36) + Math.random().toString(36).substring(2); localStorage.setItem('guppy_uuid', uuid); }
+        return uuid;
+    }
+    
+    socket.emit('authenticate', getSafeUUID());
+    socket.on('update-count', count => document.getElementById('online-count').innerText = count);
+
+    function startChat(mode) {
+        if (isChatting) return;
+        currentMode = mode;
+        document.getElementById('messages').innerHTML = ''; 
+        document.getElementById('chat-status').innerText = "SEARCHING...";
+        document.getElementById('skip-btn').style.display = 'block';
+        socket.emit('find-match', { mode, tags: document.getElementById('interest-tags').value, honeypot: document.getElementById('phone_number').value });
+    }
+
+    socket.on('match-found', (data) => {
+        isChatting = true;
+        document.getElementById('chat-status').innerText = "CONNECTED";
+        document.getElementById('chat-input').disabled = false;
+        document.getElementById('chat-input').focus();
+        document.getElementById('report-btn').style.display = 'block';
+        if (data.mode === 'text') document.getElementById('voice-req-btn').style.display = 'block'; 
+        else if (data.mode === 'voice') initVoice();
+    });
+
+    function send() {
+        const input = document.getElementById('chat-input');
+        const val = input.value.trim();
+        if (val) { socket.emit('send-msg', val); addMsg(val, 'me'); input.value = ''; socket.emit('stop-typing'); }
+    }
+
+    function handleEnter(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }
+    function handleTyping() { socket.emit('typing'); clearTimeout(typingTimer); typingTimer = setTimeout(() => socket.emit('stop-typing'), 2000); }
+
+    socket.on('receive-msg', msg => { addMsg(msg, 'stranger'); document.getElementById('typing-indicator').innerText = ''; });
+    socket.on('stranger-typing', () => document.getElementById('typing-indicator').innerText = 'STRANGER_IS_TRANSMITTING...');
+    socket.on('stranger-stopped-typing', () => document.getElementById('typing-indicator').innerText = '');
+    socket.on('system-msg', msg => addMsg(`[SYSTEM]: ${msg}`, 'system'));
+
+    function requestVoice() { socket.emit('request-voice'); document.getElementById('voice-req-btn').style.display = 'none'; }
+    socket.on('voice-requested', () => document.getElementById('voice-modal').style.display = 'block');
+    function acceptVoice() { document.getElementById('voice-modal').style.display = 'none'; socket.emit('accept-voice'); initVoice(); }
+    socket.on('voice-accepted', () => { inVoiceCall = true; initVoice(); });
+
+    function initVoice() {
+        peer = new Peer({ config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] }});
+        peer.on('open', id => socket.emit('send-peer-id', id));
+        peer.on('call', call => {
+            navigator.mediaDevices.getUserMedia({audio: true}).then(stream => {
+                call.answer(stream);
+                call.on('stream', remoteStream => document.getElementById('remote-audio').srcObject = remoteStream);
+            });
+        });
+    }
+
+    socket.on('receive-peer-id', id => {
+        navigator.mediaDevices.getUserMedia({audio: true}).then(stream => {
+            const call = peer.call(id, stream);
+            call.on('stream', remoteStream => document.getElementById('remote-audio').srcObject = remoteStream);
+        });
+    });
+
+    socket.on('stranger-left', () => { addMsg("[STRANGER_SIGNAL_LOST]", 'system'); resetUI(); });
+    function skipChat() { socket.emit('leave-chat'); resetUI(); startChat(currentMode); }
+    function reportStranger() { socket.emit('report-user'); skipChat(); }
+
+    function resetUI() {
+        isChatting = false;
+        document.getElementById('chat-input').disabled = true;
+        document.getElementById('chat-status').innerText = "IDLE";
+        document.getElementById('voice-req-btn').style.display = 'none';
+        document.getElementById('report-btn').style.display = 'none';
+        document.getElementById('voice-modal').style.display = 'none';
+        if(peer) peer.destroy();
+    }
+
+    window.addEventListener('keydown', (e) => { if (e.key === "Escape") isChatting ? skipChat() : startChat('text'); });
+
+    function addMsg(text, type) {
+        const div = document.createElement('div');
+        div.className = `msg ${type}`;
+        div.innerText = text;
+        const msgs = document.getElementById('messages');
+        msgs.appendChild(div);
+        msgs.scrollTop = msgs.scrollHeight;
+    }
+</script>
+</body>
+</html>
