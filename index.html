@@ -3,93 +3,144 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Guppy | Chat</title>
+    <title>Guppy | Chat & Voice</title>
     <script src="/socket.io/socket.io.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        :root { --blue: #007AFF; --bg: #F4F1EA; --red: #FF3B30; --green: #34C759; --gray: #8E8E93; }
-        body { font-family: -apple-system, sans-serif; background: var(--bg); margin: 0; display: flex; height: 100dvh; justify-content: center; align-items: center; }
-        #app { width: 100%; max-width: 900px; height: 90%; background: white; display: flex; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.05); }
-        .sidebar { width: 260px; padding: 25px; border-right: 1px solid #EEE; background: #FAFAFA; display: flex; flex-direction: column; gap: 15px; }
+        :root { --blue: #007AFF; --bg: #F4F1EA; --red: #FF3B30; --green: #34C759; --gray: #8E8E93; --dark: #1C1C1E; }
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); margin: 0; display: flex; height: 100dvh; justify-content: center; align-items: center; }
+        #app { width: 100%; max-width: 900px; height: 90%; background: white; display: flex; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.05); position: relative; }
+        .sidebar { width: 260px; padding: 25px; border-right: 1px solid #EEE; background: #FAFAFA; display: flex; flex-direction: column; gap: 15px; z-index: 2; }
         .chat-area { flex: 1; display: flex; flex-direction: column; position: relative; background: white; }
+        
         #messages { flex: 1; padding: 20px; overflow-y: auto; background: var(--bg); display: flex; flex-direction: column; gap: 10px; }
-        .msg { padding: 12px 16px; border-radius: 18px; max-width: 75%; font-size: 15px; line-height: 1.4; }
+        .msg { padding: 12px 16px; border-radius: 18px; max-width: 75%; font-size: 15px; line-height: 1.4; word-wrap: break-word; }
         .me { background: var(--blue); color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
         .stranger { background: white; border: 1px solid #DDD; align-self: flex-start; border-bottom-left-radius: 4px; }
-        .system { align-self: center; font-size: 13px; color: var(--gray); font-weight: bold; margin: 10px 0; }
-        .input-box { padding: 20px; border-top: 1px solid #EEE; display: flex; gap: 10px; background: white; }
-        input[type="text"] { flex: 1; padding: 12px 18px; border-radius: 25px; border: 1px solid #DDD; outline: none; font-size: 15px; }
-        .btn { padding: 12px 20px; border-radius: 25px; border: none; cursor: pointer; font-weight: bold; color: white; transition: 0.2s; }
+        .system { align-self: center; font-size: 13px; color: var(--gray); font-weight: bold; margin: 10px 0; background: rgba(0,0,0,0.05); padding: 5px 12px; border-radius: 12px; }
+        
+        .input-box { padding: 20px; border-top: 1px solid #EEE; display: flex; gap: 10px; background: white; align-items: center; }
+        input[type="text"] { flex: 1; padding: 14px 18px; border-radius: 25px; border: 1px solid #DDD; outline: none; font-size: 15px; transition: border 0.2s; }
+        input[type="text"]:focus { border-color: var(--blue); }
+        .btn { padding: 12px 20px; border-radius: 25px; border: none; cursor: pointer; font-weight: bold; color: white; transition: 0.2s; display: flex; justify-content: center; align-items: center; gap: 8px;}
         .btn:active { transform: scale(0.95); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        #typing-indicator { font-size: 12px; color: var(--gray); font-style: italic; padding: 0 20px; height: 15px; display: none; margin-bottom: 5px; }
+
+        /* Modals */
+        .modal { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
+        .modal-content { background: white; padding: 30px; border-radius: 20px; text-align: center; display: flex; flex-direction: column; gap: 20px; width: 80%; max-width: 350px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
         
-        /* Warning Modal Styles */
-        #warning-modal { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--red); color: white; padding: 30px; border-radius: 20px; text-align: center; z-index: 1000; box-shadow: 0 20px 60px rgba(0,0,0,0.4); flex-direction: column; gap: 20px; width: 80%; }
-        
-        @media (max-width: 600px) { #app { height: 100dvh; border-radius: 0; flex-direction: column; } .sidebar { width: 100%; height: auto; border-right: none; border-bottom: 1px solid #EEE; } }
+        #warning-content { background: var(--red); color: white; }
+        #call-content { background: var(--dark); color: white; }
+
+        @media (max-width: 600px) { #app { height: 100dvh; border-radius: 0; flex-direction: column; } .sidebar { width: auto; height: auto; border-right: none; border-bottom: 1px solid #EEE; padding: 15px; } .chat-area { height: 0; flex: 1; } }
     </style>
 </head>
 <body>
 
+<audio id="remoteAudio" autoplay></audio>
+
 <div id="app">
     <div class="sidebar">
         <h2 style="margin:0;">🐟 Guppy</h2>
-        <p style="color: var(--gray); margin:0;">Online: <span id="count" style="color: var(--green); font-weight: bold;">0</span></p>
-        <input type="text" id="tags" placeholder="Interests (talk, art...)">
-        <button class="btn" id="start-btn" style="background: var(--blue);" onclick="startChat()">Start Chat</button>
+        <p style="color: var(--gray); margin:0; font-size: 14px;">Online: <span id="count" style="color: var(--green); font-weight: bold;">0</span></p>
+        
+        <input type="text" id="tags" placeholder="Interests (coding, finance...)">
+        
+        <div id="start-controls" style="display: flex; flex-direction: column; gap: 10px;">
+            <button class="btn" style="background: var(--blue);" onclick="joinQueue('text')">Text Chat</button>
+            <button class="btn" style="background: var(--dark);" onclick="joinQueue('voice')">Voice Only</button>
+        </div>
         
         <div id="active-controls" style="display:none; flex-direction: column; gap: 10px; margin-top: auto;">
+            <button class="btn" id="call-btn" style="background: var(--green);" onclick="requestCall()">📞 Request Call</button>
             <button class="btn" id="skip-btn" style="background: var(--red);" onclick="handleSkip()">Skip (Esc)</button>
-            <button class="btn" id="report-btn" style="background: var(--gray);" onclick="reportUser()">Report</button>
+            <button class="btn" style="background: transparent; color: var(--gray); border: 1px solid #DDD;" onclick="reportUser()">Report Stranger</button>
         </div>
     </div>
 
     <div class="chat-area">
-        <div id="warning-modal">
+        <div id="messages">
+            <div class="system">Select your interest and start chatting.</div>
+        </div>
+        <div id="typing-indicator">Stranger is typing...</div>
+        <div class="input-box">
+            <input type="text" id="chat-input" placeholder="Type a message..." disabled onkeypress="handleTyping(event)">
+            <button class="btn" id="send-btn" style="background: var(--blue);" onclick="sendMessage()" disabled>Send</button>
+        </div>
+    </div>
+
+    <div class="modal" id="warning-modal">
+        <div class="modal-content" id="warning-content">
             <h2 id="warn-msg" style="margin:0;">daddy chill!, or else you will get banned</h2>
             <button class="btn" style="background: white; color: var(--red);" onclick="dismissWarning()">I UNDERSTAND</button>
         </div>
-        <div id="messages">
-            <div class="system">Select a tag and press Start to begin.</div>
-        </div>
-        <div class="input-box">
-            <input type="text" id="chat-input" placeholder="Type a message..." disabled onkeydown="if(event.key==='Enter') sendMessage()">
-            <button class="btn" style="background: var(--blue);" onclick="sendMessage()">Send</button>
+    </div>
+
+    <div class="modal" id="call-modal">
+        <div class="modal-content" id="call-content">
+            <h2 style="margin:0;">📞 Incoming Voice Call</h2>
+            <p style="margin:0; color: #AAA;">Stranger wants to voice call, accept?</p>
+            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                <button class="btn" style="flex: 1; background: var(--green);" onclick="acceptCall()">Accept</button>
+                <button class="btn" style="flex: 1; background: var(--red);" onclick="rejectCall()">Decline</button>
+            </div>
         </div>
     </div>
 </div>
 
 <script>
     const socket = io();
+    const peer = new Peer(); 
     const uuid = 'user-' + Math.random().toString(36).substr(2, 9);
-    let skipState = 0; // 0 = normal, 1 = confirm
+    
+    let myPeerId = null;
+    let partnerPeerId = null;
+    let currentMode = 'text';
+    let skipState = 0; 
     let skipTimer;
+    let typingTimer;
+    let myStream = null;
 
-    socket.emit('authenticate', uuid);
-    socket.on('update-count', c => document.getElementById('count').innerText = c);
-
-    function startChat() {
-        const tags = document.getElementById('tags').value;
-        socket.emit('find-match', { mode: 'text', tags: tags });
-        document.getElementById('messages').innerHTML = '<div class="system">Searching for a stranger...</div>';
-        document.getElementById('start-btn').disabled = true;
-    }
-
-    socket.on('match-found', () => {
-        document.getElementById('messages').innerHTML = '<div class="system">Stranger connected! Say hi.</div>';
-        document.getElementById('chat-input').disabled = false;
-        document.getElementById('chat-input').focus();
-        document.getElementById('active-controls').style.display = 'flex';
-        document.getElementById('start-btn').style.display = 'none';
+    // Initialize PeerJS
+    peer.on('open', (id) => {
+        myPeerId = id;
+        socket.emit('authenticate', { uuid: uuid, peerId: id });
     });
 
-    function sendMessage() {
-        const input = document.getElementById('chat-input');
-        if (input.value.trim()) {
-            socket.emit('send-msg', input.value);
-            addMessage(input.value, 'me');
-            input.value = '';
-        }
+    socket.on('update-count', c => document.getElementById('count').innerText = c);
+
+    // --- CORE FLOW ---
+    function joinQueue(mode) {
+        currentMode = mode;
+        const tags = document.getElementById('tags').value;
+        socket.emit('find-match', { mode: mode, tags: tags });
+        
+        document.getElementById('messages').innerHTML = '<div class="system">Searching for a stranger...</div>';
+        document.getElementById('start-controls').style.display = 'none';
+        document.getElementById('active-controls').style.display = 'flex';
+        
+        // Hide call button if they chose Voice Only (we auto-call)
+        document.getElementById('call-btn').style.display = mode === 'voice' ? 'none' : 'flex';
+        disableInput();
     }
 
+    socket.on('match-found', (data) => {
+        partnerPeerId = data.peerId;
+        document.getElementById('messages').innerHTML = '<div class="system">Stranger connected!</div>';
+        
+        if (currentMode === 'text') {
+            enableInput();
+        } else if (currentMode === 'voice') {
+            // If they queued for voice only, auto-trigger the call
+            startCall(partnerPeerId);
+            document.getElementById('messages').innerHTML += '<div class="system">Connecting voice...</div>';
+        }
+    });
+
+    // --- SMART SKIP ---
     function handleSkip() {
         const btn = document.getElementById('skip-btn');
         if (skipState === 0) {
@@ -107,30 +158,117 @@
 
     function executeSkip() {
         socket.emit('leave-chat');
-        location.reload(); 
+        resetChatUI();
+        joinQueue(currentMode); // Instantly find a new user!
     }
 
+    function resetChatUI() {
+        partnerPeerId = null;
+        skipState = 0;
+        document.getElementById('skip-btn').innerText = "Skip (Esc)";
+        document.getElementById('call-btn').innerText = "📞 Request Call";
+        document.getElementById('call-btn').disabled = false;
+        disableInput();
+        if(myStream) myStream.getTracks().forEach(track => track.stop());
+    }
+
+    // --- MESSAGING & TYPING ---
+    function sendMessage() {
+        const input = document.getElementById('chat-input');
+        if (input.value.trim()) {
+            socket.emit('send-msg', input.value);
+            addMessage(input.value, 'me');
+            input.value = '';
+        }
+    }
+
+    function handleTyping(e) {
+        if (e.key === 'Enter') {
+            sendMessage();
+        } else {
+            socket.emit('typing');
+        }
+    }
+
+    socket.on('receive-msg', m => {
+        document.getElementById('typing-indicator').style.display = 'none';
+        addMessage(m, 'stranger');
+    });
+
+    socket.on('stranger-typing', () => {
+        const ind = document.getElementById('typing-indicator');
+        ind.style.display = 'block';
+        clearTimeout(typingTimer);
+        typingTimer = setTimeout(() => ind.style.display = 'none', 1500);
+    });
+
+    socket.on('stranger-left', () => {
+        addMessage('Stranger has disconnected.', 'system');
+        resetChatUI();
+        document.getElementById('active-controls').style.display = 'none';
+        document.getElementById('start-controls').style.display = 'flex';
+    });
+
+    // --- VOICE CALL LOGIC (WebRTC) ---
+    function requestCall() {
+        socket.emit('request-call');
+        document.getElementById('call-btn').innerText = "Ringing...";
+        document.getElementById('call-btn').disabled = true;
+    }
+
+    socket.on('incoming-call', () => {
+        document.getElementById('call-modal').style.display = 'flex';
+    });
+
+    function acceptCall() {
+        document.getElementById('call-modal').style.display = 'none';
+        addMessage('Voice call started.', 'system');
+        startCall(partnerPeerId);
+    }
+
+    function rejectCall() {
+        document.getElementById('call-modal').style.display = 'none';
+        addMessage('You declined the call.', 'system');
+        // Let them know? (Optional, skipping for simplicity)
+    }
+
+    async function startCall(id) {
+        try {
+            myStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            const call = peer.call(id, myStream);
+            call.on('stream', remoteStream => {
+                document.getElementById('remoteAudio').srcObject = remoteStream;
+            });
+        } catch (err) {
+            addMessage('Microphone access denied.', 'system');
+        }
+    }
+
+    peer.on('call', (call) => {
+        navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then((stream) => {
+            myStream = stream;
+            call.answer(stream);
+            call.on('stream', remoteStream => {
+                document.getElementById('remoteAudio').srcObject = remoteStream;
+            });
+        });
+    });
+
+    // --- UTILS & MODERATION ---
     function reportUser() {
         socket.emit('report-user');
         executeSkip();
     }
 
-    socket.on('receive-msg', m => addMessage(m, 'stranger'));
-    
-    socket.on('stranger-left', () => {
-        addMessage('Stranger has disconnected.', 'system');
-        document.getElementById('chat-input').disabled = true;
-    });
-
     socket.on('show-warning', t => {
         document.getElementById('warn-msg').innerText = t;
         document.getElementById('warning-modal').style.display = 'flex';
-        document.getElementById('chat-input').disabled = true;
+        disableInput();
     });
 
     function dismissWarning() {
         document.getElementById('warning-modal').style.display = 'none';
-        document.getElementById('chat-input').disabled = false;
+        enableInput();
     }
 
     function addMessage(text, type) {
@@ -142,8 +280,21 @@
         container.scrollTop = container.scrollHeight;
     }
 
+    function enableInput() {
+        document.getElementById('chat-input').disabled = false;
+        document.getElementById('send-btn').disabled = false;
+        document.getElementById('chat-input').focus();
+    }
+
+    function disableInput() {
+        document.getElementById('chat-input').disabled = true;
+        document.getElementById('send-btn').disabled = true;
+    }
+
     window.addEventListener('keydown', (e) => {
-        if (e.key === "Escape") handleSkip();
+        if (e.key === "Escape" && document.getElementById('active-controls').style.display !== 'none') {
+            handleSkip();
+        }
     });
 </script>
 </body>
