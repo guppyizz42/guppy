@@ -11,7 +11,7 @@ app.use(express.static('public'));
 // --- MODERATION DATA ---
 const bannedIPs = new Map(); 
 const userStrikes = new Map(); 
-const badWords = ['fuck', 'shit', 'bitch', 'asshole', 'pussy', 'dick']; 
+const badWords = ['fuck', 'shit', 'bitch', 'asshole', 'pussy', 'dick', 'chut', 'randi']; 
 
 let waitingUsers = []; 
 let onlineCount = 0;
@@ -67,7 +67,7 @@ io.on('connection', (socket) => {
             const strikes = getStrikes(socket.uuid);
             strikes.slurs += 1;
             if (strikes.slurs === 5) {
-                socket.emit('show-warning', 'daddy chill, or else you will get banned');
+                socket.emit('show-warning', 'daddy chill..., or else you will get banned');
             } else if (strikes.slurs >= 6) {
                 bannedIPs.set(socket.ip, Date.now() + 3600000);
                 socket.disconnect();
