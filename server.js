@@ -12,7 +12,7 @@ app.use(express.static('public'));
 const bannedIPs = new Map(); 
 const userStrikes = new Map(); 
 // You can add more words to this list below
-const badWords = ['fuck', 'shit', 'bitch', 'asshole', 'pussy', 'dick']; 
+const badWords = ['fuck', 'shit', 'bitch', 'asshole', 'pussy', 'dick', 'randi', 'chamar', 'chut']; 
 
 let waitingUsers = []; 
 let onlineCount = 0;
