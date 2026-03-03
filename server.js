@@ -11,8 +11,7 @@ app.use(express.static('public'));
 // --- MODERATION DATA ---
 const bannedIPs = new Map(); 
 const userStrikes = new Map(); 
-// You can add more words to this list below
-const badWords = ['fuck', 'shit', 'bitch', 'asshole', 'pussy', 'dick', 'randi', 'chamar', 'chut']; 
+const badWords = ['fuck', 'shit', 'bitch', 'asshole', 'pussy', 'dick']; 
 
 let waitingUsers = []; 
 let onlineCount = 0;
@@ -25,12 +24,12 @@ function getStrikes(uuid) {
 }
 
 io.on('connection', (socket) => {
+    // Get IP for banning
     const userIP = socket.handshake.headers['x-forwarded-for'] || socket.request.connection.remoteAddress;
     socket.ip = userIP;
 
-    // Check if IP is currently banned
     if (bannedIPs.has(userIP) && bannedIPs.get(userIP) > Date.now()) {
-        socket.emit('system-msg', 'You are currently banned for 1 hour.');
+        socket.emit('system-msg', 'You are banned for 1 hour.');
         socket.disconnect();
         return;
     }
@@ -41,7 +40,7 @@ io.on('connection', (socket) => {
     socket.on('authenticate', (uuid) => { socket.uuid = uuid; });
 
     socket.on('find-match', (data) => {
-        socket.interest = data.tags ? data.tags.toLowerCase() : "";
+        socket.interest = (data && data.tags) ? data.tags.toLowerCase() : "";
         let match = waitingUsers.find(u => u.id !== socket.id && (u.interest === socket.interest || !socket.interest));
         
         if (match) {
@@ -70,7 +69,7 @@ io.on('connection', (socket) => {
             if (strikes.slurs === 5) {
                 socket.emit('show-warning', 'daddy chill, or else you will get banned');
             } else if (strikes.slurs >= 6) {
-                bannedIPs.set(socket.ip, Date.now() + 3600000); // 1 hour
+                bannedIPs.set(socket.ip, Date.now() + 3600000);
                 socket.disconnect();
                 return;
             }
@@ -83,14 +82,19 @@ io.on('connection', (socket) => {
         const strikes = getStrikes(socket.partnerUUID);
         strikes.reporters.add(socket.uuid);
         
-        const partnerId = [...io.sockets.adapter.rooms.get(socket.room)].find(id => id !== socket.id);
+        const room = io.sockets.adapter.rooms.get(socket.room);
+        if (!room) return;
+
+        const partnerId = [...room].find(id => id !== socket.id);
         const partner = io.sockets.sockets.get(partnerId);
 
-        if (strikes.reporters.size === 5 && partner) {
-            partner.emit('show-warning', 'daddy chill, or else you will get banned');
-        } else if (strikes.reporters.size >= 6 && partner) {
-            bannedIPs.set(partner.ip, Date.now() + 3600000);
-            partner.disconnect();
+        if (partner) {
+            if (strikes.reporters.size === 5) {
+                partner.emit('show-warning', 'daddy chill, or else you will get banned');
+            } else if (strikes.reporters.size >= 6) {
+                bannedIPs.set(partner.ip, Date.now() + 3600000);
+                partner.disconnect();
+            }
         }
     });
 
@@ -111,10 +115,4 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, '0.0.0.0', () => console.log(`Guppy running on ${PORT}`));
-
-// CRITICAL FOR DEPLOYMENT: Listen on the Port provided by the host
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`🚀 Guppy deployed on port ${PORT}`);
-});
+server.listen(PORT, '0.0.0.0', () => console.log(`Server live on ${PORT}`));
