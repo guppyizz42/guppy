@@ -6,10 +6,8 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// Render fix: Look in the root folder for index.html
 app.use(express.static(__dirname));
 
-// --- MODERATION DATA ---
 const bannedIPs = new Map(); 
 const userStrikes = new Map(); 
 const badWords = ['fuck', 'shit', 'bitch', 'asshole', 'pussy', 'dick']; 
@@ -42,12 +40,10 @@ io.on('connection', (socket) => {
         socket.peerId = data.peerId;
     });
 
-    // --- MATCHMAKING ---
     socket.on('find-match', (data) => {
         socket.interest = (data && data.tags) ? data.tags.toLowerCase().trim() : "";
-        socket.mode = data.mode; // 'text' or 'voice'
+        socket.mode = data.mode; 
         
-        // Find someone with same mode, and either same tag or no tag preference
         let matchIndex = waitingUsers.findIndex(u => 
             u.id !== socket.id && 
             u.mode === socket.mode &&
@@ -57,7 +53,6 @@ io.on('connection', (socket) => {
         if (matchIndex !== -1) {
             let match = waitingUsers.splice(matchIndex, 1)[0];
             const roomName = `room-${socket.id}-${match.id}`;
-            
             socket.join(roomName);
             match.join(roomName);
             socket.room = roomName;
@@ -65,7 +60,6 @@ io.on('connection', (socket) => {
             socket.partnerUUID = match.uuid;
             match.partnerUUID = socket.uuid;
 
-            // Send each other's PeerJS IDs for voice calls
             socket.emit('match-found', { peerId: match.peerId });
             match.emit('match-found', { peerId: socket.peerId });
         } else {
@@ -73,10 +67,8 @@ io.on('connection', (socket) => {
         }
     });
 
-    // --- CHAT & MODERATION ---
     socket.on('send-msg', (msg) => {
         if (!socket.room) return;
-        
         const lowerMsg = msg.toLowerCase();
         const containsSlur = badWords.some(word => lowerMsg.includes(word));
         const containsLink = lowerMsg.includes('.com') || lowerMsg.includes('http');
@@ -84,11 +76,10 @@ io.on('connection', (socket) => {
         if (containsSlur || containsLink) {
             const strikes = getStrikes(socket.uuid);
             strikes.slurs += 1;
-            
             if (strikes.slurs === 5) {
                 socket.emit('show-warning', 'daddy chill!, or else you will get banned');
             } else if (strikes.slurs >= 6) {
-                bannedIPs.set(socket.ip, Date.now() + 3600000); // 1 Hour Ban
+                bannedIPs.set(socket.ip, Date.now() + 3600000); 
                 socket.disconnect();
                 return;
             }
@@ -100,12 +91,17 @@ io.on('connection', (socket) => {
         if (socket.room) socket.to(socket.room).emit('stranger-typing');
     });
 
-    // --- CALL SIGNALING ---
+    // --- UPDATED CALL SIGNALING ---
     socket.on('request-call', () => {
         if (socket.room) socket.to(socket.room).emit('incoming-call');
     });
 
-    // --- REPORTING ---
+    // New event: Tells the caller the receiver hit "Accept"
+    socket.on('accept-call', () => {
+        if (socket.room) socket.to(socket.room).emit('call-accepted');
+    });
+    // ------------------------------
+
     socket.on('report-user', () => {
         if (!socket.room || !socket.partnerUUID) return;
         const strikes = getStrikes(socket.partnerUUID);
@@ -126,7 +122,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // --- SMART SKIP & DISCONNECT ---
     socket.on('leave-chat', () => {
         if (socket.room) {
             socket.to(socket.room).emit('stranger-left');
@@ -145,3 +140,4 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => console.log(`Guppy server live on ${PORT}`));
+
