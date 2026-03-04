@@ -166,10 +166,16 @@
         partnerPeerId = null;
         skipState = 0;
         document.getElementById('skip-btn').innerText = "Skip (Esc)";
+        
+        // Reset Call Button UI
         document.getElementById('call-btn').innerText = "📞 Request Call";
         document.getElementById('call-btn').disabled = false;
+        
         disableInput();
-        if(myStream) myStream.getTracks().forEach(track => track.stop());
+        if(myStream) {
+            myStream.getTracks().forEach(track => track.stop());
+            myStream = null;
+        }
     }
 
     // --- MESSAGING & TYPING ---
@@ -220,8 +226,15 @@
         document.getElementById('call-modal').style.display = 'flex';
     });
 
+    socket.on('call-accepted', () => {
+        document.getElementById('call-btn').innerText = "On Call 🟢";
+        document.getElementById('call-btn').disabled = true;
+        addMessage('Stranger accepted the call.', 'system');
+    });
+
     function acceptCall() {
         document.getElementById('call-modal').style.display = 'none';
+        socket.emit('accept-call'); // Notify the caller
         addMessage('Voice call started.', 'system');
         startCall(partnerPeerId);
     }
@@ -229,28 +242,41 @@
     function rejectCall() {
         document.getElementById('call-modal').style.display = 'none';
         addMessage('You declined the call.', 'system');
-        // Let them know? (Optional, skipping for simplicity)
     }
 
     async function startCall(id) {
         try {
             myStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
             const call = peer.call(id, myStream);
+            
+            // Lock UI to On Call
+            document.getElementById('call-btn').innerText = "On Call 🟢";
+            document.getElementById('call-btn').disabled = true;
+
             call.on('stream', remoteStream => {
                 document.getElementById('remoteAudio').srcObject = remoteStream;
             });
         } catch (err) {
             addMessage('Microphone access denied.', 'system');
+            document.getElementById('call-btn').innerText = "📞 Request Call";
+            document.getElementById('call-btn').disabled = false;
         }
     }
 
     peer.on('call', (call) => {
         navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then((stream) => {
             myStream = stream;
+            
+            // Lock UI to On Call
+            document.getElementById('call-btn').innerText = "On Call 🟢";
+            document.getElementById('call-btn').disabled = true;
+
             call.answer(stream);
             call.on('stream', remoteStream => {
                 document.getElementById('remoteAudio').srcObject = remoteStream;
             });
+        }).catch(err => {
+            addMessage('Microphone access denied for incoming call.', 'system');
         });
     });
 
