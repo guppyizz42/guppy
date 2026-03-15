@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Guppy | Chat & Voice</title>
+    <title>Guppy | Talk to Strangers!</title>
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
@@ -28,10 +28,17 @@
 
         #typing-indicator { font-size: 12px; color: var(--gray); font-style: italic; padding: 0 20px; height: 15px; display: none; margin-bottom: 5px; }
         #tags { flex: none; padding: 12px 16px; font-size: 14px; }
+        
+        /* Game Styles */
+        #game-container { display: none; flex: 1; position: relative; background: #a2d5f2; cursor: pointer; }
+        #gameCanvas { display: block; width: 100%; height: 100%; }
+        #game-score { position: absolute; top: 20px; right: 30px; font-size: 32px; font-weight: bold; color: white; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
+        #game-msg { position: absolute; top: 40%; width: 100%; text-align: center; color: white; font-weight: bold; font-size: 24px; text-shadow: 1px 1px 3px rgba(0,0,0,0.4); pointer-events: none; }
+        .waiting-text { font-size: 14px; font-weight: normal; margin-top: 10px; opacity: 0.8; }
+
         /* Modals */
         .modal { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
         .modal-content { background: white; padding: 30px; border-radius: 20px; text-align: center; display: flex; flex-direction: column; gap: 20px; width: 80%; max-width: 350px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
-        
         #warning-content { background: var(--red); color: white; }
         #call-content { background: var(--dark); color: white; }
 
@@ -65,6 +72,13 @@
         <div id="messages">
             <div class="system">Select your interest and start chatting.</div>
         </div>
+        
+        <div id="game-container">
+            <canvas id="gameCanvas"></canvas>
+            <div id="game-score">0</div>
+            <div id="game-msg">Tap to Swim!<div class="waiting-text">Searching for a stranger...</div></div>
+        </div>
+
         <div id="typing-indicator">Stranger is typing...</div>
         <div class="input-box">
             <input type="text" id="chat-input" placeholder="Type a message..." disabled onkeypress="handleTyping(event)">
@@ -104,7 +118,143 @@
     let typingTimer;
     let myStream = null;
 
-    // Initialize PeerJS
+    // --- FLAPPY GUPPY LOGIC ---
+    let canvas, ctx, gameLoopId;
+    let guppy = { x: 50, y: 150, velocity: 0, gravity: 0.5, jump: -7 };
+    let pipes = [];
+    let frame = 0, score = 0;
+    let gameRunning = false;
+    let gameInitialized = false;
+
+    function initGame() {
+        canvas = document.getElementById('gameCanvas');
+        ctx = canvas.getContext('2d');
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        
+        // Touch / Click to flap
+        document.getElementById('game-container').addEventListener('mousedown', flap);
+        document.getElementById('game-container').addEventListener('touchstart', (e) => { e.preventDefault(); flap(); });
+        window.addEventListener('keydown', (e) => { if (e.code === 'Space' && gameRunning) { e.preventDefault(); flap(); } });
+        gameInitialized = true;
+    }
+
+    function resizeCanvas() {
+        if(canvas && document.getElementById('game-container').style.display === 'block') {
+            canvas.width = document.getElementById('game-container').clientWidth;
+            canvas.height = document.getElementById('game-container').clientHeight;
+        }
+    }
+
+    function flap() {
+        if (!gameRunning) return;
+        guppy.velocity = guppy.jump;
+        document.getElementById('game-msg').style.display = 'none';
+    }
+
+    function startGame() {
+        document.getElementById('messages').style.display = 'none';
+        document.getElementById('game-container').style.display = 'block';
+        if (!gameInitialized) initGame();
+        resizeCanvas();
+        
+        guppy.y = canvas.height / 2;
+        guppy.velocity = 0;
+        pipes = [];
+        frame = 0;
+        score = 0;
+        gameRunning = true;
+        document.getElementById('game-score').innerText = score;
+        document.getElementById('game-msg').style.display = 'block';
+        document.getElementById('game-msg').innerHTML = 'Tap to Swim!<div class="waiting-text">Searching for a stranger...</div>';
+        
+        if (gameLoopId) cancelAnimationFrame(gameLoopId);
+        gameLoop();
+    }
+
+    function stopGame() {
+        gameRunning = false;
+        if (gameLoopId) cancelAnimationFrame(gameLoopId);
+        document.getElementById('game-container').style.display = 'none';
+        document.getElementById('messages').style.display = 'flex';
+    }
+
+    function gameOver() {
+        gameRunning = false;
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        document.getElementById('game-msg').style.display = 'block';
+        document.getElementById('game-msg').innerHTML = 'Ouch! Tap to Restart<div class="waiting-text">Still searching...</div>';
+        
+        // Restart on next tap
+        setTimeout(() => {
+            document.getElementById('game-container').addEventListener('mousedown', restartGame, { once: true });
+            document.getElementById('game-container').addEventListener('touchstart', restartGame, { once: true });
+        }, 300);
+    }
+
+    function restartGame() {
+        if (document.getElementById('game-container').style.display === 'block') {
+            startGame();
+        }
+    }
+
+    function gameLoop() {
+        if (!gameRunning) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Physics
+        guppy.velocity += guppy.gravity;
+        guppy.y += guppy.velocity;
+        
+        // Draw Fish
+        ctx.font = "35px Arial";
+        ctx.fillText("🐟", guppy.x, guppy.y);
+
+        // Spawn Pipes
+        if (frame % 100 === 0) {
+            let gap = 140;
+            let topHeight = Math.random() * (canvas.height - gap - 60) + 30;
+            pipes.push({ x: canvas.width, top: topHeight, bottom: topHeight + gap, width: 45, passed: false });
+        }
+
+        ctx.fillStyle = "#34C759"; // Green Seaweed
+        for (let i = 0; i < pipes.length; i++) {
+            let p = pipes[i];
+            p.x -= 3; // Speed
+            
+            // Draw Pipes
+            ctx.fillRect(p.x, 0, p.width, p.top);
+            ctx.fillRect(p.x, p.bottom, p.width, canvas.height - p.bottom);
+
+            // Collision Detection
+            let fishBox = { x: guppy.x + 5, y: guppy.y - 25, width: 25, height: 25 };
+            if (fishBox.x < p.x + p.width && fishBox.x + fishBox.width > p.x && 
+                (fishBox.y < p.top || fishBox.y + fishBox.height > p.bottom)) {
+                gameOver();
+                return;
+            }
+
+            // Score
+            if (p.x + p.width < guppy.x && !p.passed) {
+                score++;
+                p.passed = true;
+                document.getElementById('game-score').innerText = score;
+            }
+        }
+
+        // Floor / Ceiling Collision
+        if (guppy.y > canvas.height || guppy.y < 20) {
+            gameOver();
+            return;
+        }
+
+        pipes = pipes.filter(p => p.x + p.width > 0);
+        frame++;
+        gameLoopId = requestAnimationFrame(gameLoop);
+    }
+    // --- END GAME LOGIC ---
+
     peer.on('open', (id) => {
         myPeerId = id;
         socket.emit('authenticate', { uuid: uuid, peerId: id });
@@ -118,23 +268,25 @@
         const tags = document.getElementById('tags').value;
         socket.emit('find-match', { mode: mode, tags: tags });
         
-        document.getElementById('messages').innerHTML = '<div class="system">Searching for a stranger...</div>';
         document.getElementById('start-controls').style.display = 'none';
         document.getElementById('active-controls').style.display = 'flex';
-        
-        // Hide call button if they chose Voice Only (we auto-call)
         document.getElementById('call-btn').style.display = mode === 'voice' ? 'none' : 'flex';
         disableInput();
+        
+        // TRIGGER THE GAME!
+        startGame();
     }
 
     socket.on('match-found', (data) => {
         partnerPeerId = data.peerId;
-        document.getElementById('messages').innerHTML = '<div class="system">Stranger connected!</div>';
+        
+        // STOP GAME AND SHOW CHAT
+        stopGame();
+        document.getElementById('messages').innerHTML = '<div class="system">Stranger connected! Say hi.</div>';
         
         if (currentMode === 'text') {
             enableInput();
         } else if (currentMode === 'voice') {
-            // If they queued for voice only, auto-trigger the call
             startCall(partnerPeerId);
             document.getElementById('messages').innerHTML += '<div class="system">Connecting voice...</div>';
         }
@@ -159,18 +311,15 @@
     function executeSkip() {
         socket.emit('leave-chat');
         resetChatUI();
-        joinQueue(currentMode); // Instantly find a new user!
+        joinQueue(currentMode); 
     }
 
     function resetChatUI() {
         partnerPeerId = null;
         skipState = 0;
         document.getElementById('skip-btn').innerText = "Skip (Esc)";
-        
-        // Reset Call Button UI
         document.getElementById('call-btn').innerText = "📞 Request Call";
         document.getElementById('call-btn').disabled = false;
-        
         disableInput();
         if(myStream) {
             myStream.getTracks().forEach(track => track.stop());
@@ -234,7 +383,7 @@
 
     function acceptCall() {
         document.getElementById('call-modal').style.display = 'none';
-        socket.emit('accept-call'); // Notify the caller
+        socket.emit('accept-call'); 
         addMessage('Voice call started.', 'system');
         startCall(partnerPeerId);
     }
@@ -248,11 +397,8 @@
         try {
             myStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
             const call = peer.call(id, myStream);
-            
-            // Lock UI to On Call
             document.getElementById('call-btn').innerText = "On Call 🟢";
             document.getElementById('call-btn').disabled = true;
-
             call.on('stream', remoteStream => {
                 document.getElementById('remoteAudio').srcObject = remoteStream;
             });
@@ -266,11 +412,8 @@
     peer.on('call', (call) => {
         navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then((stream) => {
             myStream = stream;
-            
-            // Lock UI to On Call
             document.getElementById('call-btn').innerText = "On Call 🟢";
             document.getElementById('call-btn').disabled = true;
-
             call.answer(stream);
             call.on('stream', remoteStream => {
                 document.getElementById('remoteAudio').srcObject = remoteStream;
