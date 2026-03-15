@@ -1,50 +1,95 @@
-:root { --blue: #007AFF; --bg: #F4F1EA; --red: #FF3B30; --green: #34C759; --gray: #8E8E93; --dark: #1C1C1E; }
-body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); margin: 0; display: flex; height: 100dvh; justify-content: center; align-items: center; }
-
-#app { width: 100%; max-width: 900px; height: 90%; background: white; display: flex; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.05); position: relative; }
-
-.sidebar { width: 260px; padding: 25px; border-right: 1px solid #EEE; background: #FAFAFA; display: flex; flex-direction: column; gap: 15px; }
-.online-text { color: var(--gray); margin:0; font-size: 14px; }
-#tags { padding: 12px 16px; font-size: 14px; border: 1px solid #DDD; border-radius: 10px; outline: none; }
-
-.control-group { display: flex; flex-direction: column; gap: 10px; }
-.btn { padding: 12px 20px; border-radius: 25px; border: none; cursor: pointer; font-weight: bold; color: white; transition: 0.2s; }
-.btn:active { transform: scale(0.95); }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-blue { background: var(--blue); }
-.btn-dark { background: var(--dark); }
-.btn-green { background: var(--green); }
-.btn-red { background: var(--red); }
-
-.chat-area { flex: 1; display: flex; flex-direction: column; background: white; }
-#messages { flex: 1; padding: 20px; overflow-y: auto; background: var(--bg); display: flex; flex-direction: column; gap: 10px; }
-.msg { padding: 12px 16px; border-radius: 18px; max-width: 75%; font-size: 15px; line-height: 1.4; word-wrap: break-word; }
-.me { background: var(--blue); color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
-.stranger { background: white; border: 1px solid #DDD; align-self: flex-start; border-bottom-left-radius: 4px; }
-.system { align-self: center; font-size: 13px; color: var(--gray); font-weight: bold; margin: 10px 0; background: rgba(0,0,0,0.05); padding: 5px 12px; border-radius: 12px; }
-.interest-msg { color: #D4AF37; background: #FFF9E6; border: 1px solid #FFE699; }
-
-.input-box { padding: 20px; border-top: 1px solid #EEE; display: flex; gap: 10px; background: white; }
-#chat-input { flex: 1; padding: 14px 18px; border-radius: 25px; border: 1px solid #DDD; outline: none; font-size: 15px; }
-#chat-input:focus { border-color: var(--blue); }
-
-#typing-indicator { font-size: 12px; color: var(--gray); font-style: italic; padding: 0 20px; height: 15px; display: none; margin-bottom: 5px; }
-
-.modal { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
-.modal-content { background: white; padding: 30px; border-radius: 20px; text-align: center; display: flex; flex-direction: column; gap: 20px; width: 80%; max-width: 350px; }
-.call-content { background: var(--dark); color: white; }
-
-@media (max-width: 600px) { 
-    #app { height: 100dvh; border-radius: 0; flex-direction: column; } 
-    .sidebar { width: auto; height: auto; border-right: none; border-bottom: 1px solid #EEE; padding: 15px; } 
-}
-@keyframes rotateVoid {
-    from { transform: rotate(0deg) scale(1); filter: hue-rotate(0deg); }
-    to { transform: rotate(3600deg) scale(0.1); filter: hue-rotate(360deg); }
+:root {
+    --bg-dull: #c5c1b4; /* Darker, duller beige */
+    --sidebar-bg: #b7b3a6; /* Even deeper tone */
+    --text-main: #2e2e2e;
+    --blue-dull: #5a7d9a;
+    --red-dull: #a65d57;
+    --green-dull: #6b8e6b;
+    --border: rgba(0,0,0,0.15);
 }
 
-.void-active {
-    animation: rotateVoid 10s infinite linear;
-    pointer-events: none; /* Makes the UI unclickable while spinning */
-    transition: all 0.5s ease-in-out;
+body {
+    font-family: 'Courier New', Courier, monospace; /* Keeping it raw/brutalist */
+    background-color: #a8a499; /* Deep dull background */
+    margin: 0;
+    display: flex;
+    height: 100dvh;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+
+#app {
+    width: 100%;
+    max-width: 1000px;
+    height: 90%;
+    background: var(--bg-dull);
+    display: flex;
+    border: 2px solid var(--text-main);
+    box-shadow: 10px 10px 0px rgba(0,0,0,0.2);
+    transition: opacity 0.5s ease;
+}
+
+/* Sidebar Styling */
+.sidebar {
+    width: 280px;
+    padding: 20px;
+    background: var(--sidebar-bg);
+    border-right: 2px solid var(--text-main);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.btn {
+    padding: 12px;
+    border: 2px solid var(--text-main);
+    background: #e0ddd5;
+    cursor: pointer;
+    font-weight: bold;
+    text-transform: uppercase;
+    transition: 0.2s;
+}
+
+.btn:hover { background: #d0cdc3; }
+.btn-blue { background: var(--blue-dull); color: white; }
+.btn-red { background: var(--red-dull); color: white; }
+
+/* Chat Area */
+.chat-area { flex: 1; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+#messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.msg { padding: 10px 15px; border: 1px solid var(--text-main); max-width: 80%; font-size: 14px; }
+.me { align-self: flex-end; background: #d0cdc3; }
+.stranger { align-self: flex-start; background: #faf8f2; }
+.system { align-self: center; font-size: 12px; opacity: 0.6; }
+
+.input-box { padding: 15px; border-top: 2px solid var(--text-main); display: flex; gap: 10px; }
+#chat-input { flex: 1; padding: 10px; border: 2px solid var(--text-main); background: #f0ede5; }
+
+/* --- THE VOID PORTAL EFFECTS --- */
+#void-tunnel {
+    position: fixed;
+    top: -50%; left: -50%; width: 200%; height: 200%;
+    background: conic-gradient(from 0deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #8b00ff, #ff0000);
+    background-size: 5% 5%;
+    z-index: -1;
+    opacity: 0;
+}
+
+.void-enabled #void-tunnel {
+    opacity: 1;
+    z-index: 9999;
+    animation: hyper-spin 0.2s infinite linear, hue-shift 0.5s infinite linear;
+}
+
+.void-enabled #app { opacity: 0; pointer-events: none; }
+
+@keyframes hyper-spin {
+    from { transform: rotate(0deg) scale(1); }
+    to { transform: rotate(360deg) scale(1.8); }
+}
+
+@keyframes hue-shift {
+    from { filter: hue-rotate(0deg); }
+    to { filter: hue-rotate(360deg); }
 }

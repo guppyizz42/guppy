@@ -1,13 +1,9 @@
 function toggleVoid() {
-    const app = document.getElementById('app');
-    app.classList.toggle('void-active');
-    
-    if (app.classList.contains('void-active')) {
-        console.log("Entering the void...");
-    }
+    document.body.classList.toggle('void-enabled');
 }
 
-// Ensure the void ends when a match is found
-socket.on('match-found', () => {
-    document.getElementById('app').classList.remove('void-active');
-});
+function stopVoid() {
+    document.body.classList.remove('void-enabled');
+}
+
+window.addEventListener('stop-all-activities', stopVoid);

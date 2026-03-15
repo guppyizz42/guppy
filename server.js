@@ -1,143 +1,131 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+// Serve all your modular files (index.html, client.js, void.js, etc.)
 app.use(express.static(__dirname));
 
-const bannedIPs = new Map(); 
-const userStrikes = new Map(); 
-const badWords = ['fuck', 'shit', 'bitch', 'asshole', 'pussy', 'dick']; 
-
-let waitingUsers = []; 
-let onlineCount = 0;
-
-function getStrikes(uuid) {
-    if (!userStrikes.has(uuid)) {
-        userStrikes.set(uuid, { slurs: 0, reporters: new Set() });
-    }
-    return userStrikes.get(uuid);
-}
+let users = []; // Store active users: { id, uuid, peerId, mode, tags, status }
 
 io.on('connection', (socket) => {
-    const userIP = socket.handshake.headers['x-forwarded-for'] || socket.request.connection.remoteAddress;
-    socket.ip = userIP;
+    console.log('User connected:', socket.id);
 
-    if (bannedIPs.has(userIP) && bannedIPs.get(userIP) > Date.now()) {
-        socket.emit('system-msg', 'You are currently banned for 1 hour.');
-        socket.disconnect();
-        return;
+    // 1. Initial Authentication
+    socket.on('authenticate', (data) => {
+        users.push({
+            id: socket.id,
+            uuid: data.uuid,
+            peerId: data.peerId,
+            status: 'idle',
+            mode: null,
+            tags: null
+        });
+        io.emit('update-count', users.length);
+    });
+
+    // 2. The Matchmaking Logic (With Interest Priority)
+    socket.on('find-match', (data) => {
+        const user = users.find(u => u.id === socket.id);
+        if (!user) return;
+
+        user.status = 'searching';
+        user.mode = data.mode;
+        user.tags = data.tags ? data.tags.toLowerCase().trim() : "";
+
+        // Attempt 1: Look for an exact interest match
+        let partner = users.find(u => 
+            u.id !== socket.id && 
+            u.status === 'searching' && 
+            u.mode === user.mode && 
+            user.tags !== "" && 
+            u.tags === user.tags
+        );
+
+        // Attempt 2: If no interest match, wait 5 seconds, then allow any match
+        if (!partner) {
+            setTimeout(() => {
+                const refreshedUser = users.find(u => u.id === socket.id);
+                if (!refreshedUser || refreshedUser.status !== 'searching') return;
+
+                // Look for anyone in the same mode
+                let anyPartner = users.find(u => 
+                    u.id !== socket.id && 
+                    u.status === 'searching' && 
+                    u.mode === refreshedUser.mode
+                );
+
+                if (anyPartner) {
+                    finalizeMatch(refreshedUser, anyPartner);
+                }
+            }, 5000); // 5-second "Interest Priority" window
+        } else {
+            finalizeMatch(user, partner);
+        }
+    });
+
+    function finalizeMatch(u1, u2) {
+        u1.status = 'chatting';
+        u2.status = 'chatting';
+        u1.partner = u2.id;
+        u2.partner = u1.id;
+
+        const commonTag = (u1.tags === u2.tags && u1.tags !== "") ? u1.tags : null;
+
+        io.to(u1.id).emit('match-found', { peerId: u2.peerId, commonInterest: commonTag });
+        io.to(u2.id).emit('match-found', { peerId: u1.peerId, commonInterest: commonTag });
     }
 
-    onlineCount++;
-    io.emit('update-count', onlineCount);
-
-    socket.on('authenticate', (data) => {
-        socket.uuid = data.uuid;
-        socket.peerId = data.peerId;
-    });
-
-    socket.on('find-match', (data) => {
-        socket.interest = (data && data.tags) ? data.tags.toLowerCase().trim() : "";
-        socket.mode = data.mode; 
-        
-        let matchIndex = waitingUsers.findIndex(u => 
-            u.id !== socket.id && 
-            u.mode === socket.mode &&
-            (u.interest === socket.interest || !socket.interest || !u.interest)
-        );
-        
-        if (matchIndex !== -1) {
-            let match = waitingUsers.splice(matchIndex, 1)[0];
-            const roomName = `room-${socket.id}-${match.id}`;
-            socket.join(roomName);
-            match.join(roomName);
-            socket.room = roomName;
-            match.room = roomName;
-            socket.partnerUUID = match.uuid;
-            match.partnerUUID = socket.uuid;
-
-            socket.emit('match-found', { peerId: match.peerId });
-            match.emit('match-found', { peerId: socket.peerId });
-        } else {
-            waitingUsers.push(socket);
-        }
-    });
-
+    // 3. Communication & Disconnects
     socket.on('send-msg', (msg) => {
-        if (!socket.room) return;
-        const lowerMsg = msg.toLowerCase();
-        const containsSlur = badWords.some(word => lowerMsg.includes(word));
-        const containsLink = lowerMsg.includes('.com') || lowerMsg.includes('http');
-        
-        if (containsSlur || containsLink) {
-            const strikes = getStrikes(socket.uuid);
-            strikes.slurs += 1;
-            if (strikes.slurs === 5) {
-                socket.emit('show-warning', 'daddy chill!, or else you will get banned');
-            } else if (strikes.slurs >= 6) {
-                bannedIPs.set(socket.ip, Date.now() + 3600000); 
-                socket.disconnect();
-                return;
-            }
+        const user = users.find(u => u.id === socket.id);
+        if (user && user.partner) {
+            io.to(user.partner).emit('receive-msg', msg);
         }
-        socket.to(socket.room).emit('receive-msg', msg);
     });
 
     socket.on('typing', () => {
-        if (socket.room) socket.to(socket.room).emit('stranger-typing');
+        const user = users.find(u => u.id === socket.id);
+        if (user && user.partner) {
+            io.to(user.partner).emit('stranger-typing');
+        }
     });
 
-    // --- UPDATED CALL SIGNALING ---
     socket.on('request-call', () => {
-        if (socket.room) socket.to(socket.room).emit('incoming-call');
+        const user = users.find(u => u.id === socket.id);
+        if (user && user.partner) io.to(user.partner).emit('incoming-call');
     });
 
-    // New event: Tells the caller the receiver hit "Accept"
     socket.on('accept-call', () => {
-        if (socket.room) socket.to(socket.room).emit('call-accepted');
+        const user = users.find(u => u.id === socket.id);
+        if (user && user.partner) {
+            io.to(user.id).emit('call-accepted');
+            io.to(user.partner).emit('call-accepted');
+        }
     });
-    // ------------------------------
 
-    socket.on('report-user', () => {
-        if (!socket.room || !socket.partnerUUID) return;
-        const strikes = getStrikes(socket.partnerUUID);
-        strikes.reporters.add(socket.uuid);
-        
-        const room = io.sockets.adapter.rooms.get(socket.room);
-        if (room) {
-            const partnerId = [...room].find(id => id !== socket.id);
-            const partner = io.sockets.sockets.get(partnerId);
-            if (partner) {
-                if (strikes.reporters.size === 5) {
-                    partner.emit('show-warning', 'daddy chill!, or else you will get banned');
-                } else if (strikes.reporters.size >= 6) {
-                    bannedIPs.set(partner.ip, Date.now() + 3600000);
-                    partner.disconnect();
-                }
+    socket.on('leave-chat', () => disconnectUser(socket.id));
+    socket.on('disconnect', () => disconnectUser(socket.id));
+
+    function disconnectUser(id) {
+        const userIndex = users.findIndex(u => u.id === id);
+        if (userIndex !== -1) {
+            const user = users[userIndex];
+            if (user.partner) {
+                io.to(user.partner).emit('stranger-left');
+                const partner = users.find(u => u.id === user.partner);
+                if (partner) partner.status = 'idle';
             }
+            users.splice(userIndex, 1);
+            io.emit('update-count', users.length);
         }
-    });
-
-    socket.on('leave-chat', () => {
-        if (socket.room) {
-            socket.to(socket.room).emit('stranger-left');
-            socket.leave(socket.room);
-            socket.room = null;
-        }
-    });
-
-    socket.on('disconnect', () => {
-        onlineCount--;
-        io.emit('update-count', onlineCount);
-        if (socket.room) socket.to(socket.room).emit('stranger-left');
-        waitingUsers = waitingUsers.filter(u => u.id !== socket.id);
-    });
+    }
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, '0.0.0.0', () => console.log(`Guppy server live on ${PORT}`));
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
