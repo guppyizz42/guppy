@@ -3,85 +3,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Guppy | Talk to Strangers</title>
+    <title>Guppy | Arcade</title>
     <link rel="stylesheet" href="style.css">
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body>
-
 <audio id="remoteAudio" autoplay></audio>
-
 <div id="app">
     <div class="sidebar">
         <h2 style="margin:0;">🐟 Guppy</h2>
-        <p class="online-text">Online: <span id="count" style="color: var(--green); font-weight: bold;">0</span></p>
-        
-        <input type="text" id="tags" placeholder="Interests (coding, art...)">
-        
-        <div id="start-controls" class="control-group">
+        <p style="color:var(--gray); font-size:12px;">Online: <span id="count">0</span></p>
+        <input type="text" id="tags" placeholder="Interests...">
+        <div class="control-group">
             <button class="btn btn-blue" onclick="joinQueue('text')">Text Chat</button>
             <button class="btn btn-dark" onclick="joinQueue('voice')">Voice Only</button>
         </div>
-
-        <div id="arcade-controls" class="control-group" style="margin-top: 10px;">
-            <div class="game-card" id="game-tab" onclick="toggleGame()" style="background: #a2d5f2; color: #005f8d; border: 2px solid #82c4eb; padding: 10px; border-radius: 15px; text-align: center; cursor: pointer; font-weight: bold;">
-                🎮 Play Flappy Guppy
-            </div>
-            
-            <div class="game-card" id="void-tab" onclick="toggleVoid()" style="background: #000; color: #fff; border: 2px solid #333; padding: 10px; border-radius: 15px; text-align: center; cursor: pointer; font-weight: bold; margin-top: 5px;">
-                🌀 Enter the Void
-            </div>
+        <div style="margin-top:10px; display:flex; flex-direction:column; gap:5px;">
+            <div class="btn" style="background:#a2d5f2; color:#005f8d; text-align:center;" onclick="startGame()">🎮 Play Game</div>
+            <div class="btn" style="background:#000; text-align:center;" onclick="toggleVoid()">🌀 The Void</div>
+            <div class="btn" style="background:#fff; color:#000; border:1px solid #000; text-align:center;" onclick="toggleEgo()">👁️ Ego Portal</div>
         </div>
-        
-        <div id="active-controls" class="control-group" style="display:none; margin-top: auto;">
-            <button class="btn btn-green" id="call-btn" onclick="requestCall()">📞 Request Call</button>
-            <button class="btn btn-red" id="skip-btn" onclick="handleSkip()">Skip (Esc)</button>
+        <div id="active-controls" style="display:none; margin-top:auto; flex-direction:column; gap:5px;">
+            <button class="btn btn-green" id="call-btn" onclick="requestCall()">📞 Call</button>
+            <button class="btn btn-red" onclick="handleSkip()">Skip</button>
         </div>
     </div>
-
     <div class="chat-area">
-        <div id="game-container" style="display: none; flex: 1; background: #a2d5f2; position: relative;">
+        <div id="game-container" style="display:none; flex:1; background:#a2d5f2; position:relative;">
             <canvas id="gameCanvas"></canvas>
-            <div id="score" style="position: absolute; top: 10px; right: 20px; font-size: 24px; color: white; font-weight: bold;">0</div>
+            <div id="score" style="position:absolute; top:10px; right:20px; font-size:24px; color:white;">0</div>
         </div>
-
-        <div id="messages">
-            <div class="system">Select your interest and start chatting.</div>
-        </div>
-        
-        <div id="typing-indicator">Stranger is typing...</div>
-        
+        <div id="messages"></div>
         <div class="input-box">
-            <input type="text" id="chat-input" placeholder="Type a message..." disabled onkeypress="handleTyping(event)">
-            <button class="btn btn-blue" id="send-btn" onclick="sendMessage()" disabled>Send</button>
-        </div>
-    </div>
-
-    <div class="modal" id="call-modal">
-        <div class="modal-content call-content">
-            <h2 style="margin:0;">📞 Incoming Call</h2>
-            <div style="display: flex; gap: 10px; margin-top: 10px;">
-                <button class="btn btn-green" style="flex: 1;" onclick="acceptCall()">Accept</button>
-                <button class="btn btn-red" style="flex: 1;" onclick="rejectCall()">Decline</button>
-            </div>
+            <input type="text" id="chat-input" placeholder="Type..." disabled onkeypress="handleTyping(event)">
+            <button class="btn btn-blue" onclick="sendMessage()">Send</button>
         </div>
     </div>
 </div>
-
 <script src="client.js"></script>
-<script src="void.js"></script>
-<script>
-    // Simple bridge for the game toggle since the game code is in client.js
-    function toggleGame() {
-        if (typeof startGame === "function") {
-            if (document.getElementById('game-container').style.display === 'none') {
-                startGame();
-            } else {
-                stopGame();
-            }
-        }
-    }
-</script>
 </body>
 </html>
