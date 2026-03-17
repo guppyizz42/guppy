@@ -1,40 +1,37 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const path = require('path');
 
 const app = express();
-const server = http.createServer(app); // Attachment point
-
-const io = new Server(server, {
-    cors: { origin: "*" }
-});
+const server = http.createServer(app);
+const io = new Server(server, { cors: { origin: "*" } });
 
 app.use(express.static(__dirname));
 
 let users = [];
 
 io.on('connection', (socket) => {
-    console.log('Node connected:', socket.id);
-
     socket.on('authenticate', (data) => {
         users = users.filter(u => u.id !== socket.id);
-        users.push({ id: socket.id, peerId: data.peerId, status: 'idle' });
+        users.push({ id: socket.id, peerId: data.peerId, status: 'idle', partner: null });
         io.emit('update-count', users.length);
     });
 
     socket.on('find-match', (data) => {
         const user = users.find(u => u.id === socket.id);
-        if (!user) return;
+        if (!user || user.status === 'chatting') return;
+
         user.status = 'searching';
         user.mode = data.mode;
 
         let partner = users.find(p => p.id !== socket.id && p.status === 'searching' && p.mode === user.mode);
+
         if (partner) {
-            user.status = 'chatting'; user.partner = partner.id;
-            partner.status = 'chatting'; partner.partner = user.id;
-            io.to(user.id).emit('match-found', { peerId: partner.peerId });
-            io.to(partner.id).emit('match-found', { peerId: user.peerId });
+            user.status = partner.status = 'chatting';
+            user.partner = partner.id;
+            partner.partner = user.id;
+            io.to(user.id).emit('match-found', { peerId: partner.peerId, mode: user.mode });
+            io.to(partner.id).emit('match-found', { peerId: user.peerId, mode: partner.mode });
         }
     });
 
@@ -43,12 +40,19 @@ io.on('connection', (socket) => {
         if (u && u.partner) io.to(u.partner).emit('receive-msg', msg);
     });
 
-    socket.on('disconnect', () => {
-        users = users.filter(u => u.id !== socket.id);
+    const leave = () => {
+        const u = users.find(u => u.id === socket.id);
+        if (u && u.partner) {
+            io.to(u.partner).emit('stranger-left');
+            const p = users.find(p => p.id === u.partner);
+            if (p) { p.status = 'idle'; p.partner = null; }
+        }
+        users = users.filter(usr => usr.id !== socket.id);
         io.emit('update-count', users.length);
-    });
+    };
+
+    socket.on('leave-chat', leave);
+    socket.on('disconnect', leave);
 });
 
-// Render dynamic port selection
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`GUPPY Mesh active on ${PORT}`));
+server.listen(process.env.PORT || 3000, '0.0.0.0', () => console.log("GUPPY ONLINE"));
