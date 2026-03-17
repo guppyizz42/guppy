@@ -1,17 +1,14 @@
 {
   "name": "guppy",
-  "version": "2.0.0",
-  "description": "Anonymous WebRTC Chat with Void Portals",
+  "version": "1.0.0",
+  "description": "Anonymous Chat",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
-  },
-  "engines": {
-    "node": ">=16"
   },
   "dependencies": {
     "express": "^4.18.2",
     "socket.io": "^4.7.2",
     "peerjs": "^1.5.2"
-}
+  }
 }
