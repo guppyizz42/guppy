@@ -1,8 +1,13 @@
+// void.js — The Void Portal
+let voidActive = false;
+
 function toggleVoid() {
-    document.body.classList.toggle('void-enabled');
+    voidActive = !voidActive;
+    document.body.classList.toggle('void-enabled', voidActive);
 }
 
 function stopVoid() {
+    voidActive = false;
     document.body.classList.remove('void-enabled');
 }
 

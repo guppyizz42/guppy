@@ -3,51 +3,95 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GUPPY | VOID</title>
+    <title>GUPPY</title>
     <link rel="stylesheet" href="style.css">
     <script src="/socket.io/socket.io.js"></script>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body>
 
-<div id="void-tunnel"></div>
+<div id="void-tunnel">
+    <div id="void-exit" onclick="toggleVoid()">[ ESCAPE THE VOID ]</div>
+</div>
 
 <div id="app">
     <div class="sidebar">
         <h2>🐟 GUPPY</h2>
         <p>Online: <span id="count">0</span></p>
-        <input type="text" id="tags" placeholder="Interests...">
-        
-        <div id="start-controls" style="display:flex; flex-direction:column; gap:5px;">
-            <button class="btn btn-blue" onclick="joinQueue('text')">Text Chat</button>
-            <button class="btn" onclick="joinQueue('voice')">Voice Only</button>
+
+        <input type="text" id="tags" placeholder="Interests (e.g. music, art)">
+
+        <div id="start-controls">
+            <button class="btn btn-blue" onclick="joinQueue('text')">💬 Text Chat</button>
+            <button class="btn btn-green" onclick="joinQueue('voice')">🎙️ Voice Chat</button>
         </div>
 
-        <div style="margin-top:20px; display:flex; flex-direction:column; gap:8px;">
+        <div id="active-controls" style="display:none;">
+            <div id="voice-status" style="display:none;">
+                <span id="voice-state-label">🎙️ Connecting voice...</span>
+                <button class="btn btn-mute" id="mute-btn" onclick="toggleMute()">🔇 Mute</button>
+            </div>
+            <button class="btn btn-red" onclick="handleSkip()">⏭ SKIP (ESC)</button>
+        </div>
+
+        <div class="extras">
             <div class="btn" onclick="toggleGame()">🎮 THE ARCADE</div>
-            <div class="btn" onclick="toggleVoid()" style="background:black; color:white;">🌀 THE VOID</div>
+            <div class="btn void-btn" onclick="toggleVoid()">🌀 THE VOID</div>
             <div class="btn" onclick="toggleEgo()">👁️ EGO PORTAL</div>
-        </div>
-
-        <div id="active-controls" style="display:none; margin-top:auto; flex-direction:column; gap:5px;">
-            <button class="btn btn-red" onclick="handleSkip()">SKIP (ESC)</button>
         </div>
     </div>
 
     <div class="chat-area">
-        <div id="game-container" style="display:none; flex:1; position:relative; background:#2e2e2e;">
+        <!-- Arcade -->
+        <div id="game-container" style="display:none;">
             <canvas id="gameCanvas"></canvas>
-            <div id="score" style="position:absolute; top:10px; right:20px; color:white; font-size:20px;">0</div>
+            <div id="score">0</div>
+            <div id="game-over" style="display:none;">
+                <p>GAME OVER</p>
+                <span id="final-score"></span>
+                <button class="btn" onclick="restartGame()">RETRY</button>
+                <button class="btn btn-red" onclick="stopGame()">EXIT</button>
+            </div>
         </div>
+
+        <!-- Ego Portal video -->
+        <div id="ego-container" style="display:none;">
+            <video id="ego-vid" autoplay muted playsinline></video>
+            <button class="btn btn-red ego-close" onclick="stopEgo()">✕ CLOSE</button>
+        </div>
+
+        <!-- Voice call UI -->
+        <div id="voice-container" style="display:none;">
+            <div id="voice-visualizer">
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+            </div>
+            <p id="voice-label">🎙️ Voice connected</p>
+            <audio id="remote-audio" autoplay></audio>
+        </div>
+
+        <!-- Messages -->
         <div id="messages"></div>
+
+        <!-- Typing indicator -->
+        <div id="typing-indicator" style="display:none;">
+            <span>stranger is typing</span><span class="dots">...</span>
+        </div>
+
         <div class="input-box">
-            <input type="text" id="chat-input" placeholder="Type..." disabled onkeypress="if(event.key==='Enter') sendMessage()">
-            <button class="btn" onclick="sendMessage()">SEND</button>
+            <input type="text" id="chat-input" placeholder="Type a message..." disabled
+                oninput="emitTyping()"
+                onkeypress="if(event.key==='Enter') sendMessage()">
+            <button class="btn btn-send" onclick="sendMessage()">SEND</button>
         </div>
     </div>
 </div>
 
+<!-- Load scripts in correct order, with correct filenames -->
 <script src="client.js"></script>
+<script src="voice.js"></script>
 <script src="arcade.js"></script>
 <script src="void.js"></script>
 <script src="ego.js"></script>

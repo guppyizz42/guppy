@@ -1,70 +1,66 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// Serve all your modular files (index.html, client.js, void.js, etc.)
 app.use(express.static(__dirname));
 
-let users = []; // Store active users: { id, uuid, peerId, mode, tags, status }
+let users = [];
 
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
-    // 1. Initial Authentication
     socket.on('authenticate', (data) => {
+        // Remove any stale entry for this socket
+        users = users.filter(u => u.id !== socket.id);
         users.push({
             id: socket.id,
             uuid: data.uuid,
             peerId: data.peerId,
             status: 'idle',
             mode: null,
-            tags: null
+            tags: '',
+            partner: null
         });
         io.emit('update-count', users.length);
     });
 
-    // 2. The Matchmaking Logic (With Interest Priority)
     socket.on('find-match', (data) => {
         const user = users.find(u => u.id === socket.id);
         if (!user) return;
 
         user.status = 'searching';
         user.mode = data.mode;
-        user.tags = data.tags ? data.tags.toLowerCase().trim() : "";
+        user.tags = data.tags ? data.tags.toLowerCase().trim() : '';
 
-        // Attempt 1: Look for an exact interest match
-        let partner = users.find(u => 
-            u.id !== socket.id && 
-            u.status === 'searching' && 
-            u.mode === user.mode && 
-            user.tags !== "" && 
+        // Try exact interest match first
+        let partner = users.find(u =>
+            u.id !== socket.id &&
+            u.status === 'searching' &&
+            u.mode === user.mode &&
+            user.tags !== '' &&
             u.tags === user.tags
         );
 
-        // Attempt 2: If no interest match, wait 5 seconds, then allow any match
-        if (!partner) {
+        if (partner) {
+            finalizeMatch(user, partner);
+        } else {
+            // Wait 5s then match anyone in same mode
             setTimeout(() => {
-                const refreshedUser = users.find(u => u.id === socket.id);
-                if (!refreshedUser || refreshedUser.status !== 'searching') return;
+                const u = users.find(u => u.id === socket.id);
+                if (!u || u.status !== 'searching') return;
 
-                // Look for anyone in the same mode
-                let anyPartner = users.find(u => 
-                    u.id !== socket.id && 
-                    u.status === 'searching' && 
-                    u.mode === refreshedUser.mode
+                let anyPartner = users.find(p =>
+                    p.id !== socket.id &&
+                    p.status === 'searching' &&
+                    p.mode === u.mode
                 );
 
-                if (anyPartner) {
-                    finalizeMatch(refreshedUser, anyPartner);
-                }
-            }, 5000); // 5-second "Interest Priority" window
-        } else {
-            finalizeMatch(user, partner);
+                if (anyPartner) finalizeMatch(u, anyPartner);
+            }, 5000);
         }
     });
 
@@ -74,13 +70,12 @@ io.on('connection', (socket) => {
         u1.partner = u2.id;
         u2.partner = u1.id;
 
-        const commonTag = (u1.tags === u2.tags && u1.tags !== "") ? u1.tags : null;
+        const commonTag = (u1.tags && u1.tags === u2.tags) ? u1.tags : null;
 
-        io.to(u1.id).emit('match-found', { peerId: u2.peerId, commonInterest: commonTag });
-        io.to(u2.id).emit('match-found', { peerId: u1.peerId, commonInterest: commonTag });
+        io.to(u1.id).emit('match-found', { peerId: u2.peerId, commonInterest: commonTag, mode: u1.mode });
+        io.to(u2.id).emit('match-found', { peerId: u1.peerId, commonInterest: commonTag, mode: u2.mode });
     }
 
-    // 3. Communication & Disconnects
     socket.on('send-msg', (msg) => {
         const user = users.find(u => u.id === socket.id);
         if (user && user.partner) {
@@ -95,16 +90,10 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('request-call', () => {
-        const user = users.find(u => u.id === socket.id);
-        if (user && user.partner) io.to(user.partner).emit('incoming-call');
-    });
-
-    socket.on('accept-call', () => {
+    socket.on('webrtc-signal', (data) => {
         const user = users.find(u => u.id === socket.id);
         if (user && user.partner) {
-            io.to(user.id).emit('call-accepted');
-            io.to(user.partner).emit('call-accepted');
+            io.to(user.partner).emit('webrtc-signal', data);
         }
     });
 
@@ -112,20 +101,19 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => disconnectUser(socket.id));
 
     function disconnectUser(id) {
-        const userIndex = users.findIndex(u => u.id === id);
-        if (userIndex !== -1) {
-            const user = users[userIndex];
+        const idx = users.findIndex(u => u.id === id);
+        if (idx !== -1) {
+            const user = users[idx];
             if (user.partner) {
                 io.to(user.partner).emit('stranger-left');
                 const partner = users.find(u => u.id === user.partner);
-                if (partner) partner.status = 'idle';
+                if (partner) { partner.status = 'idle'; partner.partner = null; }
             }
-            users.splice(userIndex, 1);
+            users.splice(idx, 1);
             io.emit('update-count', users.length);
         }
     }
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
+server.listen(PORT, () => console.log(`🐟 GUPPY running on port ${PORT}`));
