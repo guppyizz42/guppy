@@ -1,44 +1,49 @@
 window.socket = io();
 window.peer = new Peer();
-window.partnerPeerId = null;
 
-window.peer.on('open', (id) => {
-    window.socket.emit('authenticate', { peerId: id });
-});
-
+window.peer.on('open', (id) => window.socket.emit('authenticate', { peerId: id }));
 window.socket.on('update-count', c => document.getElementById('count').innerText = c);
 
-window.joinQueue = function(mode) {
-    const tags = document.getElementById('tags').value;
-    window.socket.emit('find-match', { mode, tags });
-    document.getElementById('messages').innerHTML = '<div class="system">Scanning mesh...</div>';
+window.joinQueue = (mode) => {
+    window.socket.emit('find-match', { mode });
+    document.getElementById('messages').innerHTML = '<div class="system">Searching...</div>';
     document.getElementById('start-controls').style.display = 'none';
     document.getElementById('active-controls').style.display = 'flex';
 };
 
 window.socket.on('match-found', (data) => {
-    window.dispatchEvent(new Event('stop-all-activities'));
-    window.partnerPeerId = data.peerId;
-    document.getElementById('messages').innerHTML = `<div class="system">Stranger connected. ${data.commonInterest || ''}</div>`;
+    // Stop Void/Ego
+    if (window.stopVoid) window.stopVoid();
+    if (window.stopEgo) window.stopEgo();
+    
+    document.getElementById('messages').innerHTML = '<div class="system">Connected!</div>';
     document.getElementById('chat-input').disabled = false;
-    if (data.mode === 'voice') window.dispatchEvent(new CustomEvent('start-voice'));
+
+    // Trigger voice if needed
+    if (data.mode === 'voice' && window.startVoice) window.startVoice();
 });
 
-window.sendMessage = function() {
-    const input = document.getElementById('chat-input');
-    if (input.value.trim()) {
-        window.socket.emit('send-msg', input.value);
-        addMsg(input.value, 'me');
-        input.value = '';
+window.handleSkip = () => {
+    window.socket.emit('leave-chat');
+    location.reload(); 
+};
+
+// ESC Key Listener
+window.addEventListener('keydown', (e) => { if (e.key === "Escape") window.handleSkip(); });
+
+window.sendMessage = () => {
+    const i = document.getElementById('chat-input');
+    if (i.value.trim()) {
+        window.socket.emit('send-msg', i.value);
+        addMsg(i.value, 'me');
+        i.value = '';
     }
 };
 
 window.socket.on('receive-msg', m => addMsg(m, 'stranger'));
-window.socket.on('stranger-left', () => { addMsg('Stranger left.', 'system'); setTimeout(() => location.reload(), 1500); });
+window.socket.on('stranger-left', () => { addMsg('Stranger left.', 'system'); setTimeout(() => location.reload(), 1000); });
 
-function addMsg(t, cls) {
-    const d = document.createElement('div'); d.className = `msg ${cls}`; d.innerText = t;
+function addMsg(t, c) {
+    const d = document.createElement('div'); d.className = `msg ${c}`; d.innerText = t;
     const m = document.getElementById('messages'); m.appendChild(d); m.scrollTop = m.scrollHeight;
 }
-
-window.handleSkip = () => location.reload();
