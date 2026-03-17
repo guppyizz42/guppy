@@ -67,4 +67,8 @@ io.on('connection', (socket) => {
     });
 });
 
-server.listen(process.env.PORT || 3000, () => console.log("GUPPY Active"));
+s// Replace the last few lines of server.js with this:
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`GUPPY Engine active on port ${PORT}`);
+});
