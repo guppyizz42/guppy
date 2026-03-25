@@ -1,30 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GUPPY | Anonymous Mesh</title>
+    <link rel="stylesheet" href="style.css">
+    
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+</head>
+<body>
+
+<svg style="display:none;">
+    <filter id="fractal-warp">
+        <feTurbulence id="turbulence" type="fractalNoise" baseFrequency="0.01" numOctaves="5" seed="1" />
+        <feDisplacementMap in="SourceGraphic" scale="100" />
+    </filter>
+</svg>
+
+<div id="void-container">
+    <div id="void-tunnel"></div>
+    <div id="void-text-overlay"></div>
+</div>
+
 <div id="app">
     <div class="sidebar">
-        <h2>🐟 GUPPY</h2>
+        <h2 style="letter-spacing: -2px;">🐟 GUPPY</h2>
         <div class="status-bar">
             <span>Nodes: <span id="count">0</span></span>
+            <div class="voice-visualizer">
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+            </div>
         </div>
+        <p id="voice-state-label" style="font-size:9px; color:#555; margin-top: -10px;">⚪ Voice Offline</p>
+
+        <input type="text" id="tags" placeholder="Interests (comma separated)...">
         
         <div id="start-controls">
             <button class="btn btn-blue" onclick="window.joinQueue('text')">Text Node</button>
             <button class="btn" onclick="window.joinQueue('voice')">Voice Node</button>
         </div>
 
-        <div class="plugin-btns" style="margin-top:20px; display:flex; flex-direction:column; gap:5px;">
-            <button class="btn btn-dark" onclick="window.toggleVoid()">🌀 VOID</button>
-            <button class="btn btn-dark" onclick="window.toggleEgo()">👁️ EGO</button>
+        <div class="portal-controls" style="margin-top:20px; display:flex; flex-direction:column; gap:8px;">
+            <button class="btn btn-dark" onclick="window.toggleVoid()">🌀 ENTER VOID</button>
+            <button class="btn btn-dark" onclick="window.toggleEgo()">👁️ EGO PORTAL</button>
             <button class="btn btn-dark" onclick="window.toggleGame()">🎮 ARCADE</button>
         </div>
 
-        <div id="active-controls" style="display:none; margin-top:auto;">
-            <button class="btn btn-red" onclick="window.handleSkip()">SKIP (ESC)</button>
+        <div id="active-controls" style="display:none; margin-top:auto; flex-direction:column; gap:5px;">
+            <button class="btn btn-red" id="skip-btn" onclick="window.handleSkip()">SKIP (ESC)</button>
         </div>
     </div>
 
-    <div class="chat-area">
-        <div id="messages"></div>
+    <div class="chat-area" id="chat-viewport">
+        <div id="messages">
+            <div class="system">System initialized. Awaiting protocol...</div>
+        </div>
+        
         <div class="input-box">
-            <input type="text" id="chat-input" placeholder="Transmit..." disabled>
+            <input type="text" id="chat-input" placeholder="Transmit message..." disabled onkeypress="if(event.key==='Enter') window.sendMessage()">
             <button class="btn" onclick="window.sendMessage()">SEND</button>
         </div>
     </div>
@@ -37,3 +73,6 @@
 <script src="voice.js"></script>
 <script src="ego.js"></script>
 <script src="arcade.js"></script>
+
+</body>
+</html>
