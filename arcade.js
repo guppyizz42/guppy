@@ -56,7 +56,7 @@ function drawGame() {
     // Wall Collision
     if (head.x < 0 || head.x > 25 || head.y < 0 || head.y > 25) {
         window.stopGame();
-        alert("SYSTEM HALT: Link Severed.");
+        addMsg("GAME OVER: Connection Stable.", "system");
         return;
     }
 
