@@ -1,16 +1,12 @@
 /**
- * GUPPY | VOID ENGINE
- * Manages the transition between 4 distinct psychedelic phases.
+ * GUPPY | VOID ENGINE v2.0 (HAUNTED EDITION)
+ * Features: Mouse-Reactive Warp, Chromatic Ghosting, and Reality Collapse.
  */
 
 const ANCIENT_SCRIPTS = [
-    "अहं ब्रह्मास्मि", 
-    "ॐ मणि पद्मे हूँ", 
-    "קדש קדש קדש", 
-    "तत्त्वमसि", 
-    "שמע ישראל", 
-    "𐤀𐤋𐤕 𐤌𐤔𐤕", 
-    "ओं शान्तिः"
+    "अहं ब्रह्मास्मि", "ॐ मणि पद्मे हूँ", "קדש קדש קדש", 
+    "तत्त्वमसि", "שמע ישראל", "𐤀𐤋𐤕 𐤌𐤔𐤕", "ओं शान्तिः",
+    "NETI NETI", "VOID_DETECTED", "01001111 01001101"
 ];
 
 let shlokaInterval = null;
@@ -19,71 +15,95 @@ let currentPhase = 0;
 
 window.toggleVoid = function() {
     const isEnabling = !document.body.classList.contains('void-enabled');
-    
-    // Toggle the master class
     document.body.classList.toggle('void-enabled');
 
     if (isEnabling) {
-        console.log("%c [VOID PROTOCOL INITIATED] ", "background: #000; color: #39ff14;");
+        console.log("%c [VOID_DISSOLUTION_START] ", "background: #000; color: #ff0000; font-weight: bold;");
         
-        // 1. Start the Shloka Rotation (Syncs with 4s CSS animation)
+        // 1. Shloka Ghosting
         rotateShlokas();
-        shlokaInterval = setInterval(rotateShlokas, 4000); 
+        shlokaInterval = setInterval(rotateShlokas, 3000); 
         
-        // 2. Start the Pattern Morphing (Changes style every 3.5s)
+        // 2. Pattern Morphing
         cyclePatterns();
-        patternInterval = setInterval(cyclePatterns, 3500); 
+        patternInterval = setInterval(cyclePatterns, 2500); 
+
+        // 3. Mouse Interaction (Frequency Modulation)
+        document.addEventListener('mousemove', handleVoidMouse);
         
     } else {
         window.stopVoid();
     }
 };
 
+function handleVoidMouse(e) {
+    if (!document.body.classList.contains('void-enabled')) return;
+    const turb = document.getElementById('turbulence');
+    if (turb) {
+        // Map mouse X to baseFrequency (The "Vibration" of the Void)
+        const freq = (e.clientX / window.innerWidth) * 0.07;
+        turb.setAttribute('baseFrequency', freq.toFixed(4));
+        
+        // Map mouse Y to scale (The "Depth" of the Melt)
+        const map = document.querySelector('feDisplacementMap');
+        if (map) map.setAttribute('scale', (e.clientY / window.innerHeight) * 200);
+    }
+}
+
 function cyclePatterns() {
     const tunnel = document.getElementById('void-tunnel');
+    const app = document.getElementById('app');
     const turb = document.getElementById('turbulence');
     
     if (!tunnel) return;
 
-    // Remove previous phase class (phase-1, phase-2, etc.)
     tunnel.className = '';
-    
-    // Increment phase (1 through 4)
-    currentPhase = (currentPhase % 4) + 1;
+    currentPhase = (currentPhase % 5) + 1; // 5 Phases now
     tunnel.classList.add('phase-' + currentPhase);
     
-    // Randomize the SVG Warp seed so no two "melts" look the same
-    if (turb) {
-        const randomSeed = Math.floor(Math.random() * 1000);
-        turb.setAttribute('seed', randomSeed);
+    // PHASE 5: REALITY COLLAPSE (The "Scary" one)
+    if (currentPhase === 5) {
+        app.style.filter = "url(#fractal-warp) invert(1) contrast(300%)";
+        document.body.style.backgroundColor = "#1a0000"; // Deep blood red shift
+        setTimeout(() => { 
+            if(currentPhase === 5) app.style.filter = "url(#fractal-warp)";
+        }, 500);
+    } else {
+        app.style.filter = "none";
+        document.body.style.backgroundColor = "#000";
     }
+
+    if (turb) turb.setAttribute('seed', Math.floor(Math.random() * 5000));
 }
 
 function rotateShlokas() {
     const overlay = document.getElementById('void-text-overlay');
-    if (overlay) {
-        const randomIndex = Math.floor(Math.random() * ANCIENT_SCRIPTS.length);
-        overlay.innerText = ANCIENT_SCRIPTS[randomIndex];
-    }
+    if (!overlay) return;
+
+    const text = ANCIENT_SCRIPTS[Math.floor(Math.random() * ANCIENT_SCRIPTS.length)];
+    
+    // Create Chromatic Ghosting (3 layers of text)
+    overlay.innerHTML = `
+        <div class="glitch-wrapper">
+            <span class="g-layer r">${text}</span>
+            <span class="g-layer g">${text}</span>
+            <span class="g-layer b">${text}</span>
+        </div>
+    `;
 }
 
 window.stopVoid = function() {
-    // 1. Remove visual classes
     document.body.classList.remove('void-enabled');
+    document.getElementById('app').style.filter = "none";
+    document.body.style.backgroundColor = "#000";
     
-    // 2. Kill the timers to save MacBook CPU
     if (shlokaInterval) clearInterval(shlokaInterval);
     if (patternInterval) clearInterval(patternInterval);
-    
-    // 3. Reset the overlay text
+    document.removeEventListener('mousemove', handleVoidMouse);
+
     const overlay = document.getElementById('void-text-overlay');
     if (overlay) overlay.innerText = "";
-
-    console.log("%c [VOID PROTOCOL OFFLINE] ", "color: #666;");
+    console.log("%c [VOID_STABILIZED] ", "color: #444;");
 };
 
-/**
- * GLOBAL KILL-SWITCH
- * Triggered by client.js when a match is found.
- */
 window.addEventListener('stop-all-activities', window.stopVoid);
