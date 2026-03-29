@@ -33,7 +33,6 @@ window.socket.on('match-found', (data) => {
     if (inp) { inp.disabled = false; inp.focus(); }
 
     if (data.mode === 'voice' && window.startVoice) window.startVoice();
->>>>>>> ed7eb5a8136b053495189a844b7865d6bfc05863
 });
 
 // --- VIDEO CALL HANDSHAKE (ACCEPT/DENY) ---
