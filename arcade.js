@@ -1,81 +1,124 @@
 /**
- * GUPPY | ARCADE MODULE
- * A simple "Matrix Snake" to play while waiting for nodes.
+ * GUPPY | ARCADE ULTRA
+ * Features: Parallax Background, Particle Death, CRT Overlay, and Score.
  */
 
 let gameInterval = null;
 let canvas = null;
 let ctx = null;
-let snake = [{x: 10, y: 10}];
-let food = {x: 5, y: 5};
-let dx = 1;
-let dy = 0;
+
+// Game State
+let fish = { x: 50, y: 150, v: 0, gravity: 0.6, lift: -10, size: 20 };
+let blocks = [];
+let particles = [];
+let bgStars = [];
+let frameCount = 0;
+let score = 0;
+let highScore = localStorage.getItem('guppy-high-score') || 0;
+let isGameOver = false;
+let gameSpeed = 3;
 
 window.toggleGame = function() {
     const chatArea = document.querySelector('.chat-area');
-    const existingCanvas = document.getElementById('arcade-canvas');
+    if (document.getElementById('arcade-canvas')) { window.stopGame(); return; }
 
-    if (existingCanvas) {
-        window.stopGame();
-        return;
-    }
-
-    // Create Canvas
     canvas = document.createElement('canvas');
     canvas.id = 'arcade-canvas';
     canvas.width = chatArea.clientWidth;
     canvas.height = chatArea.clientHeight;
     canvas.style.position = 'absolute';
-    canvas.style.top = '0';
-    canvas.style.left = '0';
-    canvas.style.zIndex = '100';
-    canvas.style.background = '#000';
+    canvas.style.top = '0'; canvas.style.left = '0';
+    canvas.style.zIndex = '100'; canvas.style.background = '#000';
     chatArea.appendChild(canvas);
     ctx = canvas.getContext('2d');
 
-    // Hide messages while playing
-    document.getElementById('messages').style.visibility = 'hidden';
+    // Init Parallax Background
+    for(let i=0; i<50; i++) {
+        bgStars.push({ x: Math.random()*canvas.width, y: Math.random()*canvas.height, s: Math.random()*2 });
+    }
 
-    // Controls
-    window.addEventListener('keydown', changeDirection);
-    gameInterval = setInterval(drawGame, 100);
+    resetGameState();
+    document.getElementById('messages').style.visibility = 'hidden';
+    window.addEventListener('keydown', handleInput);
+    gameInterval = setInterval(drawGame, 1000 / 60); 
 };
 
-function drawGame() {
-    // Move Snake
-    const head = {x: snake[0].x + dx, y: snake[0].y + dy};
-    snake.unshift(head);
-
-    // Eat Food
-    if (head.x === food.x && head.y === food.y) {
-        food = {x: Math.floor(Math.random() * 20), y: Math.floor(Math.random() * 20)};
-    } else {
-        snake.pop();
-    }
-
-    // Wall Collision
-    if (head.x < 0 || head.x > 25 || head.y < 0 || head.y > 25) {
-        window.stopGame();
-        addMsg("GAME OVER: Connection Stable.", "system");
-        return;
-    }
-
-    // Render
-    ctx.fillStyle = "black";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    ctx.fillStyle = "#39ff14"; // Toxic Green
-    snake.forEach(part => ctx.fillRect(part.x * 20, part.y * 20, 18, 18));
-
-    ctx.fillStyle = "red";
-    ctx.fillRect(food.x * 20, food.y * 20, 18, 18);
+function resetGameState() {
+    isGameOver = false; fish.y = canvas.height/2; fish.v = 0;
+    blocks = []; particles = []; frameCount = 0; score = 0; gameSpeed = 3;
 }
 
-function changeDirection(e) {
-    if (e.key === "ArrowUp" && dy === 0) { dx = 0; dy = -1; }
-    if (e.key === "ArrowDown" && dy === 0) { dx = 0; dy = 1; }
-    if (e.key === "ArrowLeft" && dx === 0) { dx = -1; dy = 0; }
-    if (e.key === "ArrowRight" && dx === 0) { dx = 1; dy = 0; }
+function handleInput(e) { if (e.code === "Space") { fish.v = fish.lift; e.preventDefault(); } }
+
+function drawGame() {
+    if (isGameOver) { renderDeath(); return; }
+
+    // 1. Physics
+    fish.v += fish.gravity; fish.y += fish.v;
+    if (frameCount % 600 === 0) gameSpeed += 0.5;
+
+    // 2. Generate Obstacles
+    if (frameCount % 100 === 0) {
+        const gap = 140;
+        const h = Math.random() * (canvas.height - 300) + 50;
+        blocks.push({ x: canvas.width, y: 0, w: 50, h: h, p: false });
+        blocks.push({ x: canvas.width, y: h + gap, w: 50, h: canvas.height, p: false });
+    }
+
+    // 3. Render Loop
+    ctx.fillStyle = "#0a0a08"; // Dull beige-black background
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Draw Parallax Stars
+    ctx.fillStyle = "#2a2a24";
+    bgStars.forEach(s => {
+        s.x -= (gameSpeed * 0.2);
+        if (s.x < 0) s.x = canvas.width;
+        ctx.fillRect(s.x, s.y, s.s, s.s);
+    });
+
+    // Draw Blocks with "Industrial" glow
+    ctx.fillStyle = "#39ff14";
+    ctx.shadowBlur = 10; ctx.shadowColor = "#39ff14";
+    blocks.forEach((b, i) => {
+        b.x -= gameSpeed;
+        ctx.fillRect(b.x, b.y, b.w, b.h);
+        
+        // Collision & Scoring
+        if (fish.x + 15 > b.x && fish.x < b.x + b.w && fish.y + 5 > b.y && fish.y < b.y + b.h) endGame();
+        if (!b.p && b.x < fish.x) { b.p = true; if (i%2==0) score++; }
+    });
+    ctx.shadowBlur = 0;
+
+    // Draw Fish & UI
+    ctx.font = "24px monospace"; ctx.fillText("🐟", fish.x, fish.y);
+    ctx.fillStyle = "#39ff14"; ctx.font = "10px monospace";
+    ctx.fillText(`[NODES_CLEARED: ${score}]`, 20, 30);
+    ctx.fillText(`[MAX_STABILITY: ${highScore}]`, 20, 45);
+
+    if (fish.y > canvas.height || fish.y < 0) endGame();
+    frameCount++;
+}
+
+function renderDeath() {
+    ctx.fillStyle = "rgba(0,0,0,0.1)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    particles.forEach(p => {
+        p.x += p.vx; p.y += p.vy; p.a -= 0.02;
+        ctx.fillStyle = `rgba(57, 255, 20, ${p.a})`;
+        ctx.fillRect(p.x, p.y, 2, 2);
+    });
+}
+
+function endGame() {
+    if (isGameOver) return;
+    isGameOver = true;
+    for(let i=0; i<20; i++) {
+        particles.push({ x: fish.x, y: fish.y, vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10, a: 1 });
+    }
+    if (score > highScore) localStorage.setItem('guppy-high-score', score);
+    if (window.addMessage) window.addMessage(`SYSTEM ERROR: Node Collapsed. Score: ${score}`, "system");
+    setTimeout(window.stopGame, 2000);
 }
 
 window.stopGame = function() {
@@ -83,7 +126,6 @@ window.stopGame = function() {
     const c = document.getElementById('arcade-canvas');
     if (c) c.remove();
     document.getElementById('messages').style.visibility = 'visible';
-    window.removeEventListener('keydown', changeDirection);
+    window.removeEventListener('keydown', handleInput);
 };
-
 window.addEventListener('stop-all-activities', window.stopGame);
