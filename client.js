@@ -33,36 +33,61 @@ window.socket.on('match-found', (data) => {
     if (inp) { inp.disabled = false; inp.focus(); }
 
     if (data.mode === 'voice' && window.startVoice) window.startVoice();
+>>>>>>> ed7eb5a8136b053495189a844b7865d6bfc05863
 });
 
-window.handleSkip = () => {
+// --- VIDEO CALL HANDSHAKE (ACCEPT/DENY) ---
+
+// When a stranger manually requests video during a text chat
+window.socket.on('video-request-received', () => {
+    const overlay = document.getElementById('call-overlay');
+    if (overlay) overlay.style.display = 'flex';
+});
+
+// When the request is accepted, tell the media engine to fire up
+window.socket.on('start-peer-video', () => {
+    window.dispatchEvent(new CustomEvent('start-video'));
+});
+
+// Notify if they said no
+window.socket.on('video-denied-notify', () => {
+    addMessage('Stranger declined the video call.', 'system');
+});
+
+// --- BASIC CHAT LOGIC ---
+
+window.sendMessage = function() {
+    const input = document.getElementById('chat-input');
+    if (input && input.value.trim()) {
+        window.socket.emit('send-msg', input.value);
+        addMessage(input.value, 'me');
+        input.value = '';
+    }
+};
+
+window.socket.on('receive-msg', m => addMessage(m, 'stranger'));
+
+window.socket.on('stranger-left', () => {
+    addMessage('Stranger left.', 'system');
+    setTimeout(() => location.reload(), 1500);
+});
+
+// ESC KEY TO SKIP
+window.addEventListener('keydown', (e) => {
+    if (e.key === "Escape") window.handleSkip();
+});
+
+window.handleSkip = function() {
     window.socket.emit('leave-chat');
     location.reload(); 
 };
 
-window.addEventListener('keydown', (e) => { if (e.key === "Escape") window.handleSkip(); });
-
-window.sendMessage = () => {
-    const i = document.getElementById('chat-input');
-    if (i && i.value.trim()) {
-        window.socket.emit('send-msg', i.value);
-        addMsg(i.value, 'me');
-        i.value = '';
-    }
-};
-
-window.socket.on('receive-msg', m => addMsg(m, 'stranger'));
-window.socket.on('stranger-left', () => { 
-    addMsg('Stranger left.', 'system'); 
-    setTimeout(() => location.reload(), 1000); 
-});
-
-function addMsg(t, c) {
-    const m = document.getElementById('messages'); 
+function addMessage(text, type) {
+    const m = document.getElementById('messages');
     if (!m) return;
-    const d = document.createElement('div'); 
-    d.className = `msg ${c}`; 
-    d.innerText = t;
-    m.appendChild(d); 
+    const div = document.createElement('div');
+    div.className = `msg ${type}`;
+    div.innerText = text;
+    m.appendChild(div);
     m.scrollTop = m.scrollHeight;
 }
