@@ -167,4 +167,4 @@ function stopWaveAnimation() { document.querySelectorAll('.wave-bar').forEach(b 
 window.addEventListener('stop-all-activities', window.stopMedia);
 // Listen for custom trigger from client.js
 window.addEventListener('start-voice', () => window.startMedia(false));
-window.addEventListener('start-video', () => window.startMedia(true));
+window.addEventListener('start-video', () => window.startMedia(true));}
